@@ -2,9 +2,14 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::Deref;
 
+#[cfg(feature = "rustcrypto")]
+use aes_kw::{KekAes128, KekAes192, KekAes256};
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::aes::{self, AesKey};
 
+#[cfg(feature = "rustcrypto")]
+use crate::jwe::alg::aeskw::AeskwJweAlgorithm::A128kw;
 use crate::jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader};
 use crate::jwk::Jwk;
 use crate::{util, JoseError, Value};
@@ -231,12 +236,14 @@ impl JweEncrypter for AeskwJweEncrypter {
         _out_header: &mut JweHeader,
     ) -> Result<Option<Vec<u8>>, JoseError> {
         (|| -> anyhow::Result<Option<Vec<u8>>> {
+            #[cfg(feature = "openssl")]
             let aes = match AesKey::new_encrypt(&self.private_key) {
                 Ok(val) => val,
                 Err(_) => bail!("Failed to set encrypt key."),
             };
 
             let mut encrypted_key = vec![0; key.len() + 8];
+            #[cfg(feature = "openssl")]
             match aes::wrap_key(&aes, None, &mut encrypted_key, &key) {
                 Ok(val) => {
                     if val < encrypted_key.len() {
@@ -245,7 +252,27 @@ impl JweEncrypter for AeskwJweEncrypter {
                 }
                 Err(_) => bail!("Failed to wrap key."),
             }
-
+            #[cfg(feature = "rustcrypto")]
+            match self.algorithm {
+                A128kw => {
+                    let aes = KekAes128::try_from(self.private_key.as_slice())
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                    aes.wrap(&key, &mut encrypted_key)
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                }
+                AeskwJweAlgorithm::A192kw => {
+                    let aes = KekAes192::try_from(self.private_key.as_slice())
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                    aes.wrap(&key, &mut encrypted_key)
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                }
+                AeskwJweAlgorithm::A256kw => {
+                    let aes = KekAes256::try_from(self.private_key.as_slice())
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                    aes.wrap(&key, &mut encrypted_key)
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                }
+            }
             Ok(Some(encrypted_key))
         })()
         .map_err(|err| JoseError::InvalidKeyFormat(err))
@@ -304,13 +331,14 @@ impl JweDecrypter for AeskwJweDecrypter {
                 Some(val) => val,
                 None => bail!("A encrypted_key is required."),
             };
-
+            #[cfg(feature = "openssl")]
             let aes = match AesKey::new_decrypt(&self.private_key) {
                 Ok(val) => val,
                 Err(_) => bail!("Failed to set decrypt key."),
             };
 
             let mut key = vec![0; encrypted_key.len() - 8];
+            #[cfg(feature = "openssl")]
             match aes::unwrap_key(&aes, None, &mut key, encrypted_key) {
                 Ok(val) => {
                     if val < key.len() {
@@ -319,7 +347,27 @@ impl JweDecrypter for AeskwJweDecrypter {
                 }
                 Err(_) => bail!("Failed to unwrap key."),
             };
-
+            #[cfg(feature = "rustcrypto")]
+            match self.algorithm {
+                A128kw => {
+                    let aes = KekAes128::try_from(self.private_key.as_slice())
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                    aes.unwrap(encrypted_key, &mut key)
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                }
+                AeskwJweAlgorithm::A192kw => {
+                    let aes = KekAes192::try_from(self.private_key.as_slice())
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                    aes.unwrap(encrypted_key, &mut key)
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                }
+                AeskwJweAlgorithm::A256kw => {
+                    let aes = KekAes256::try_from(self.private_key.as_slice())
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                    aes.unwrap(encrypted_key, &mut key)
+                        .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e))?;
+                }
+            }
             Ok(Cow::Owned(key))
         })()
         .map_err(|err| JoseError::InvalidJweFormat(err))
