@@ -2,13 +2,10 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::bn::{BigNum, BigNumContext, BigNumRef};
 #[cfg(feature = "openssl")]
 use openssl::pkey::Private;
-// use openssl::bn::{BigNum, BigNumContext, BigNumRef};
-// use openssl::ec::{EcGroup, EcKey};
-// use openssl::nid::Nid;
-// use openssl::pkey::{PKey, Private};
 
 #[cfg(feature = "rustcrypto")]
 use crate::jwe::alg::ecdh_es::PrivateKey;
@@ -361,16 +358,20 @@ impl EcKeyPair {
     }
     #[cfg(feature = "rustcrypto")]
     pub fn to_raw_private_key(&self) -> Vec<u8> {
-        let ec_key = self.private_key.ec_key().unwrap();
-        ec_key.private_key_to_der().unwrap()
+        self.private_key.ec_key_der().unwrap()
     }
-
+    #[cfg(feature = "openssl")]
     pub fn to_traditional_pem_private_key(&self) -> Vec<u8> {
         let ec_key = self.private_key.ec_key().unwrap();
         ec_key.private_key_to_pem().unwrap()
     }
+    #[cfg(feature = "rustcrypto")]
+    pub fn to_traditional_pem_private_key(&self) -> Vec<u8> {
+        self.private_key.ec_key_pem().unwrap().as_bytes().to_vec()
+    }
 
     fn to_jwk(&self, private: bool, public: bool) -> Jwk {
+        #[cfg(feature = "openssl")]
         let ec_key = self.private_key.ec_key().unwrap();
 
         let mut jwk = Jwk::new("EC");
@@ -383,25 +384,39 @@ impl EcKeyPair {
         jwk.set_parameter("crv", Some(Value::String(self.curve.to_string())))
             .unwrap();
         if private {
+            #[cfg(feature = "openssl")]
             let d = ec_key.private_key();
+            #[cfg(feature = "openssl")]
             let d = Self::num_to_vec(&d, self.curve.coordinate_size());
+            #[cfg(feature = "rustcrypto")]
+            let d = self.private_key.secret_bytes();
             let d = util::encode_base64_urlsafe_nopad(&d);
 
             jwk.set_parameter("d", Some(Value::String(d))).unwrap();
         }
         if public {
+            #[cfg(feature = "openssl")]
             let public_key = ec_key.public_key();
+            #[cfg(feature = "openssl")]
             let mut x = BigNum::new().unwrap();
+            #[cfg(feature = "openssl")]
             let mut y = BigNum::new().unwrap();
+            #[cfg(feature = "openssl")]
             let mut ctx = BigNumContext::new().unwrap();
+            #[cfg(feature = "openssl")]
             public_key
                 .affine_coordinates_gfp(ec_key.group(), &mut x, &mut y, &mut ctx)
                 .unwrap();
-
+            #[cfg(feature = "openssl")]
             let x = Self::num_to_vec(&x, self.curve.coordinate_size());
+            #[cfg(feature = "rustcrypto")]
+            let x = self.private_key.public_key().ec_key_x();
             let x = util::encode_base64_urlsafe_nopad(&x);
 
+            #[cfg(feature = "openssl")]
             let y = Self::num_to_vec(&y, self.curve.coordinate_size());
+            #[cfg(feature = "rustcrypto")]
+            let y = self.private_key.public_key().ec_key_y();
             let y = util::encode_base64_urlsafe_nopad(&y);
 
             jwk.set_parameter("x", Some(Value::String(x))).unwrap();
@@ -539,7 +554,7 @@ impl EcKeyPair {
 
         builder.build()
     }
-
+    #[cfg(feature = "openssl")]
     fn num_to_vec(num: &BigNumRef, len: usize) -> Vec<u8> {
         let vec = num.to_vec();
         if vec.len() < len {
@@ -569,21 +584,42 @@ impl KeyPair for EcKeyPair {
             None => None,
         }
     }
-
+    #[cfg(feature = "openssl")]
     fn to_der_private_key(&self) -> Vec<u8> {
         self.private_key.private_key_to_der().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_der_private_key(&self) -> Vec<u8> {
+        self.private_key.ec_key_der().unwrap()
+    }
+    #[cfg(feature = "openssl")]
     fn to_der_public_key(&self) -> Vec<u8> {
         self.private_key.public_key_to_der().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_der_public_key(&self) -> Vec<u8> {
+        self.private_key.public_key().ec_key_der().unwrap()
+    }
+    #[cfg(feature = "openssl")]
     fn to_pem_private_key(&self) -> Vec<u8> {
         self.private_key.private_key_to_pem_pkcs8().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_pem_private_key(&self) -> Vec<u8> {
+        self.private_key.ec_key_pem().unwrap().as_bytes().to_vec()
+    }
+    #[cfg(feature = "openssl")]
     fn to_pem_public_key(&self) -> Vec<u8> {
         self.private_key.public_key_to_pem().unwrap()
+    }
+    #[cfg(feature = "rustcrypto")]
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        self.private_key
+            .public_key()
+            .ec_key_pem()
+            .unwrap()
+            .as_bytes()
+            .to_vec()
     }
 
     fn to_jwk_private_key(&self) -> Jwk {

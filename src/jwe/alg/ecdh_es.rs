@@ -46,6 +46,30 @@ pub enum PublicKey {
 }
 #[cfg(feature = "rustcrypto")]
 impl PublicKey {
+    pub fn ec_key_x(&self) -> Vec<u8> {
+        use k256::elliptic_curve::sec1::ToEncodedPoint;
+
+        match self {
+            PublicKey::P256(public_key) => public_key.to_encoded_point(false).x().unwrap().to_vec(),
+            PublicKey::P384(public_key) => public_key.to_encoded_point(false).x().unwrap().to_vec(),
+            PublicKey::P521(public_key) => public_key.to_encoded_point(false).x().unwrap().to_vec(),
+            PublicKey::K256(public_key) => public_key.to_encoded_point(false).x().unwrap().to_vec(),
+            PublicKey::X25519(public_key) => public_key.to_bytes().to_vec(),
+            PublicKey::X448(public_key) => public_key.as_bytes().to_vec(),
+        }
+    }
+    pub fn ec_key_y(&self) -> Vec<u8> {
+        use k256::elliptic_curve::sec1::ToEncodedPoint;
+
+        match self {
+            PublicKey::P256(public_key) => public_key.to_encoded_point(false).y().unwrap().to_vec(),
+            PublicKey::P384(public_key) => public_key.to_encoded_point(false).y().unwrap().to_vec(),
+            PublicKey::P521(public_key) => public_key.to_encoded_point(false).y().unwrap().to_vec(),
+            PublicKey::K256(public_key) => public_key.to_encoded_point(false).y().unwrap().to_vec(),
+            PublicKey::X25519(_) => unimplemented!("x25519 only uses single coordinate"),
+            PublicKey::X448(_) => unimplemented!("X448 only uses single coordinate"),
+        }
+    }
     pub fn ec_key_der(&self) -> Result<Vec<u8>, anyhow::Error> {
         match self {
             PublicKey::P256(key) => Ok(key.to_sec1_bytes().to_vec()),
@@ -144,6 +168,26 @@ impl Debug for PrivateKey {
 
 #[cfg(feature = "rustcrypto")]
 impl PrivateKey {
+    pub fn public_key(&self) -> PublicKey {
+        match self {
+            PrivateKey::P256(key) => PublicKey::P256(key.public_key()),
+            PrivateKey::P384(key) => PublicKey::P384(key.public_key()),
+            PrivateKey::P521(key) => PublicKey::P521(key.public_key()),
+            PrivateKey::K256(key) => PublicKey::K256(key.public_key()),
+            PrivateKey::X25519(key) => PublicKey::X25519(x25519_dalek::PublicKey::from(key)),
+            PrivateKey::X448(key) => PublicKey::X448(cx448::x448::PublicKey::from(key)),
+        }
+    }
+    pub fn secret_bytes(&self) -> Vec<u8> {
+        match self {
+            PrivateKey::P256(key) => key.to_bytes().to_vec(),
+            PrivateKey::P384(key) => key.to_bytes().to_vec(),
+            PrivateKey::P521(key) => key.to_bytes().to_vec(),
+            PrivateKey::K256(key) => key.to_bytes().to_vec(),
+            PrivateKey::X25519(key) => key.to_bytes().to_vec(),
+            PrivateKey::X448(key) => key.as_bytes().to_vec(),
+        }
+    }
     pub fn ec_key_der(&self) -> Result<Vec<u8>, anyhow::Error> {
         match self {
             PrivateKey::P256(key) => Ok(key.to_sec1_der()?.to_vec()),
