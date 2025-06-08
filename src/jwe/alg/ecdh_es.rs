@@ -16,11 +16,12 @@ use openssl::{
 use sha2::{Digest, Sha256};
 
 #[cfg(feature = "rustcrypto")]
-use crate::jwe::alg::aeskw::{aes, AesKey};
+use crate::{
+    jwe::alg::aeskw::{aes, AesKey},
+    jwk::alg::ed::EdCurve,
+};
 
 use crate::jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader};
-#[cfg(feature = "rustcrypto")]
-use crate::jwk::alg::ec::EcCurve::P256;
 use crate::jwk::alg::{
     ec::{EcCurve, EcKeyPair},
     ecx::{EcxCurve, EcxKeyPair},
@@ -43,6 +44,8 @@ pub enum PublicKey {
     K256(k256::PublicKey),
     X25519(x25519_dalek::PublicKey),
     X448(cx448::x448::PublicKey),
+    Ed25519(ed25519_dalek::VerifyingKey),
+    Ed448(cx448::VerifyingKey),
 }
 #[cfg(feature = "rustcrypto")]
 impl PublicKey {
@@ -56,6 +59,8 @@ impl PublicKey {
             PublicKey::K256(public_key) => public_key.to_encoded_point(false).x().unwrap().to_vec(),
             PublicKey::X25519(public_key) => public_key.to_bytes().to_vec(),
             PublicKey::X448(public_key) => public_key.as_bytes().to_vec(),
+            PublicKey::Ed25519(verifying_key) => verifying_key.as_bytes().to_vec(),
+            PublicKey::Ed448(verifying_key) => verifying_key.as_bytes().to_vec(),
         }
     }
     pub fn ec_key_y(&self) -> Vec<u8> {
@@ -68,6 +73,10 @@ impl PublicKey {
             PublicKey::K256(public_key) => public_key.to_encoded_point(false).y().unwrap().to_vec(),
             PublicKey::X25519(_) => unimplemented!("x25519 only uses single coordinate"),
             PublicKey::X448(_) => unimplemented!("X448 only uses single coordinate"),
+            PublicKey::Ed25519(verifying_key) => {
+                unimplemented!("ed25519 only uses single coordinate")
+            }
+            PublicKey::Ed448(verifying_key) => unimplemented!("ed448 only uses single coordinate"),
         }
     }
     pub fn ec_key_der(&self) -> Result<Vec<u8>, anyhow::Error> {
@@ -78,6 +87,8 @@ impl PublicKey {
             PublicKey::K256(key) => Ok(key.to_sec1_bytes().to_vec()),
             PublicKey::X25519(key) => Ok(key.to_bytes().to_vec()),
             PublicKey::X448(key) => Ok(key.as_bytes().to_vec()),
+            PublicKey::Ed25519(key) => Ok(key.to_bytes().to_vec()),
+            PublicKey::Ed448(key) => Ok(key.as_bytes().to_vec()),
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
@@ -91,6 +102,8 @@ impl PublicKey {
             PublicKey::K256(key) => Ok(key.to_jwk_string().to_string()),
             PublicKey::X25519(key) => todo!("JWK not implemented for x25519"),
             PublicKey::X448(key) => todo!("JWK not implemented for x448"),
+            PublicKey::Ed25519(key) => todo!("JWK not implemented for ed25519"),
+            PublicKey::Ed448(key) => todo!("JWK not implemented for ed448"),
         }
     }
     pub fn from_pkcs8_der(key_type: EcdhEsKeyType, spki: &[u8]) -> Result<Self, anyhow::Error> {
@@ -151,6 +164,8 @@ pub enum PrivateKey {
     K256(k256::SecretKey),
     X25519(x25519_dalek::StaticSecret),
     X448(cx448::x448::Secret),
+    Ed25519(ed25519_dalek::SigningKey),
+    Ed448(cx448::SigningKey),
 }
 #[cfg(feature = "rustcrypto")]
 impl Debug for PrivateKey {
@@ -162,6 +177,8 @@ impl Debug for PrivateKey {
             PrivateKey::K256(_) => write!(f, "K256"),
             PrivateKey::X25519(_) => write!(f, "X25519"),
             PrivateKey::X448(_) => write!(f, "X448"),
+            PrivateKey::Ed25519(_) => write!(f, "Ed25519"),
+            PrivateKey::Ed448(_) => write!(f, "Ed448"),
         }
     }
 }
@@ -176,6 +193,8 @@ impl PrivateKey {
             PrivateKey::K256(key) => PublicKey::K256(key.public_key()),
             PrivateKey::X25519(key) => PublicKey::X25519(x25519_dalek::PublicKey::from(key)),
             PrivateKey::X448(key) => PublicKey::X448(cx448::x448::PublicKey::from(key)),
+            PrivateKey::Ed25519(key) => PublicKey::Ed25519(ed25519_dalek::VerifyingKey::from(key)),
+            PrivateKey::Ed448(key) => PublicKey::Ed448(key.verifying_key()),
         }
     }
     pub fn secret_bytes(&self) -> Vec<u8> {
@@ -186,6 +205,8 @@ impl PrivateKey {
             PrivateKey::K256(key) => key.to_bytes().to_vec(),
             PrivateKey::X25519(key) => key.to_bytes().to_vec(),
             PrivateKey::X448(key) => key.as_bytes().to_vec(),
+            PrivateKey::Ed25519(key) => key.to_bytes().to_vec(),
+            PrivateKey::Ed448(key) => key.as_bytes().to_vec(),
         }
     }
     pub fn ec_key_der(&self) -> Result<Vec<u8>, anyhow::Error> {
@@ -196,6 +217,8 @@ impl PrivateKey {
             PrivateKey::K256(key) => Ok(key.to_sec1_der()?.to_vec()),
             PrivateKey::X25519(key) => Ok(key.to_bytes().to_vec()),
             PrivateKey::X448(key) => Ok(key.as_bytes().to_vec()),
+            PrivateKey::Ed25519(key) => Ok(key.to_bytes().to_vec()),
+            PrivateKey::Ed448(key) => Ok(key.as_bytes().to_vec()),
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
@@ -208,6 +231,8 @@ impl PrivateKey {
             PrivateKey::K256(key) => Ok(key.to_sec1_pem(LineEnding::CRLF).unwrap().to_string()),
             PrivateKey::X25519(key) => todo!("PEM not implemented for x25519"),
             PrivateKey::X448(key) => todo!("PEM not implemented for x448"),
+            PrivateKey::Ed25519(key) => todo!("PEM not implemented for ed25519"),
+            PrivateKey::Ed448(key) => todo!("PEM not implemented for ed448"),
         }
     }
     pub fn ec_key_jwk(&self) -> Result<String, anyhow::Error> {
@@ -218,6 +243,8 @@ impl PrivateKey {
             PrivateKey::K256(key) => Ok(key.to_jwk_string().to_string()),
             PrivateKey::X25519(key) => todo!("JWK not implemented for x25519"),
             PrivateKey::X448(key) => todo!("JWK not implemented for x448"),
+            PrivateKey::Ed25519(key) => todo!("JWK not implemented for ed25519"),
+            PrivateKey::Ed448(key) => todo!("JWK not implemented for ed448"),
         }
     }
     pub fn from_pkcs8_for_ec_curve(
@@ -231,6 +258,26 @@ impl PrivateKey {
         pkcs8_der: &[u8],
     ) -> Result<Self, anyhow::Error> {
         Self::from_pkcs8(EcdhEsKeyType::Ecx(curve), pkcs8_der)
+    }
+    pub fn from_pkcs8_for_ed_curve(
+        curve: EdCurve,
+        pkcs8_der: &[u8],
+    ) -> Result<Self, anyhow::Error> {
+        use rsa::pkcs8::DecodePrivateKey;
+
+        Ok(match curve {
+            EdCurve::Ed25519 => {
+                if pkcs8_der.len() != 32 {
+                    bail!("Invalid x25519 public key length");
+                }
+                let mut x_bytes: [u8; 32] = [0; 32];
+                x_bytes.copy_from_slice(&pkcs8_der);
+                PrivateKey::Ed25519(ed25519_dalek::SigningKey::from(x_bytes))
+            }
+            EdCurve::Ed448 => {
+                PrivateKey::Ed448(cx448::SigningKey::from_pkcs8_der(&pkcs8_der).unwrap())
+            }
+        })
     }
     pub fn from_pkcs8(key_type: EcdhEsKeyType, pkcs8_der: &[u8]) -> Result<Self, anyhow::Error> {
         Ok(match key_type {
@@ -1093,7 +1140,7 @@ impl EcdhEsJweEncrypter {
             let derived_key = deriver.derive_to_vec()?;
 
             #[cfg(feature = "rustcrypto")]
-            let derived_key = private_key.derive_shared_secret(&self.public_key)?;
+            let derived_key = private_key.derive_shared_secret(self.public_key)?;
 
             let shared_key = self.algorithm.concat_kdf(
                 alg,

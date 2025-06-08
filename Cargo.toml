@@ -25,6 +25,7 @@ rustcrypto = [
     "p384",
     "p521",
     "k256",
+    "ed25519-dalek",
     "x25519-dalek",
     "cx448",
     "sha2",
@@ -84,6 +85,10 @@ rsa = { version = "0.9.8", optional = true, features = [
 cbc = { version = "0.1.2", features = ["alloc"], optional = true }
 aes = { version = "0.8.4", optional = true }
 hmac = { version = "0.12.1", optional = true }
+ed25519-dalek = { version = "2.1.1", features = [
+    "rand_core",
+    "digest",
+], optional = true }
 
 [dev-dependencies]
 doc-comment = "0.3.3"

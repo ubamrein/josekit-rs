@@ -1,9 +1,14 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
+#[cfg(feature = "rustcrypto")]
+use aes_gcm::aead::OsRng;
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private};
 
+#[cfg(feature = "rustcrypto")]
+use crate::jwe::alg::ecdh_es::PrivateKey;
 use crate::jwk::{Jwk, KeyPair};
 use crate::util;
 use crate::util::der::{DerBuilder, DerReader, DerType};
@@ -40,7 +45,10 @@ impl Display for EdCurve {
 
 #[derive(Debug, Clone)]
 pub struct EdKeyPair {
+    #[cfg(feature = "openssl")]
     private_key: PKey<Private>,
+    #[cfg(feature = "rustcrypto")]
+    private_key: PrivateKey,
     curve: EdCurve,
     algorithm: Option<String>,
     key_id: Option<String>,
@@ -62,7 +70,13 @@ impl EdKeyPair {
         }
     }
 
+    #[cfg(feature = "openssl")]
     pub(crate) fn into_private_key(self) -> PKey<Private> {
+        self.private_key
+    }
+
+    #[cfg(feature = "rustcrypto")]
+    pub(crate) fn into_private_key(self) -> PrivateKey {
         self.private_key
     }
 
@@ -76,9 +90,17 @@ impl EdKeyPair {
     /// * `curve` - EdDSA curve algorithm
     pub fn generate(curve: EdCurve) -> Result<Self, JoseError> {
         (|| -> anyhow::Result<Self> {
+            #[cfg(feature = "openssl")]
             let private_key = match curve {
                 EdCurve::Ed25519 => PKey::generate_ed25519()?,
                 EdCurve::Ed448 => PKey::generate_ed448()?,
+            };
+            #[cfg(feature = "rustcrypto")]
+            let private_key = match curve {
+                EdCurve::Ed25519 => {
+                    PrivateKey::Ed25519(ed25519_dalek::SigningKey::generate(&mut OsRng))
+                }
+                EdCurve::Ed448 => PrivateKey::Ed448(cx448::SigningKey::generate(&mut OsRng)),
             };
 
             Ok(Self {
@@ -101,8 +123,10 @@ impl EdKeyPair {
                 Some(val) => (input.as_ref(), val),
                 None => bail!("The EdDSA private key must be wrapped by PKCS#8 format."),
             };
-
+            #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(pkcs8_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = PrivateKey::from_pkcs8_for_ed_curve(curve, pkcs8_der)?;
 
             Ok(Self {
                 private_key,
@@ -148,7 +172,10 @@ impl EdKeyPair {
                 alg => bail!("Inappropriate algorithm: {}", alg),
             };
 
+            #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(pkcs8_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = PrivateKey::from_pkcs8_for_ed_curve(curve, pkcs8_der)?;
 
             Ok(Self {
                 private_key,
@@ -189,7 +216,10 @@ impl EdKeyPair {
             builder.append_octed_string_from_bytes(&d);
 
             let pkcs8 = Self::to_pkcs8(&builder.build(), false, curve);
-            let private_key = PKey::private_key_from_der(&pkcs8)?;
+            #[cfg(feature = "openssl")]
+            let private_key = PKey::private_key_from_der(pkcs8)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = PrivateKey::from_pkcs8_for_ed_curve(curve, &pkcs8)?;
             let algorithm = jwk.algorithm().map(|val| val.to_string());
             let key_id = jwk.key_id().map(|val| val.to_string());
 
@@ -204,7 +234,10 @@ impl EdKeyPair {
     }
 
     pub fn to_traditional_pem_private_key(&self) -> Vec<u8> {
+        #[cfg(feature = "openssl")]
         let der = self.private_key.private_key_to_der().unwrap();
+        #[cfg(feature = "rustcrypto")]
+        let der = self.private_key.ec_key_der().unwrap();
         let der = util::encode_base64_standard(&der);
         let alg = match self.curve {
             EdCurve::Ed25519 => "ED25519 PRIVATE KEY",
@@ -239,7 +272,10 @@ impl EdKeyPair {
             .unwrap();
 
         if private {
+            #[cfg(feature = "openssl")]
             let private_der = self.private_key.private_key_to_der().unwrap();
+            #[cfg(feature = "rustcrypto")]
+            let private_der = self.private_key.ec_key_der().unwrap();
 
             let mut reader = DerReader::from_bytes(&private_der);
 
@@ -294,7 +330,10 @@ impl EdKeyPair {
             jwk.set_parameter("d", Some(Value::String(d))).unwrap();
         }
         if public {
+            #[cfg(feature = "openssl")]
             let public_der = self.private_key.public_key_to_der().unwrap();
+            #[cfg(feature = "rustcrypto")]
+            let public_der = self.private_key.public_key().ec_key_der().unwrap();
             let mut reader = DerReader::from_bytes(&public_der);
 
             match reader.next() {
@@ -424,22 +463,43 @@ impl KeyPair for EdKeyPair {
         }
     }
 
+    #[cfg(feature = "openssl")]
     fn to_der_private_key(&self) -> Vec<u8> {
         self.private_key.private_key_to_der().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_der_private_key(&self) -> Vec<u8> {
+        self.private_key.ec_key_der().unwrap()
+    }
+    #[cfg(feature = "openssl")]
     fn to_der_public_key(&self) -> Vec<u8> {
         self.private_key.public_key_to_der().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_der_public_key(&self) -> Vec<u8> {
+        self.private_key.public_key().ec_key_der().unwrap()
+    }
+    #[cfg(feature = "openssl")]
     fn to_pem_private_key(&self) -> Vec<u8> {
         self.private_key.private_key_to_pem_pkcs8().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_pem_private_key(&self) -> Vec<u8> {
+        self.private_key.ec_key_pem().unwrap().as_bytes().to_vec()
+    }
+    #[cfg(feature = "openssl")]
     fn to_pem_public_key(&self) -> Vec<u8> {
         self.private_key.public_key_to_pem().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        self.private_key
+            .public_key()
+            .ec_key_pem()
+            .unwrap()
+            .as_bytes()
+            .to_vec()
+    }
     fn to_jwk_private_key(&self) -> Jwk {
         self.to_jwk(true, false)
     }
