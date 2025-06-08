@@ -57,7 +57,7 @@ impl Cipher {
             Cipher::Aes128GCM(cipher) => {
                 let nonce = Nonce::from_slice(iv);
                 // TODO: how can we access the TagSize associated type
-                let mut buffer = Vec::with_capacity(p.msg.len() + U16::to_usize());
+                let mut buffer = plaintext.to_vec();
                 let t = cipher.encrypt_in_place_detached(nonce, p.aad, &mut buffer)?;
                 tag.copy_from_slice(&t);
                 Ok(buffer)
@@ -65,7 +65,7 @@ impl Cipher {
             Cipher::Aes192GCM(cipher) => {
                 let nonce = Nonce::from_slice(iv);
                 // TODO: how can we access the TagSize associated type
-                let mut buffer = Vec::with_capacity(p.msg.len() + U16::to_usize());
+                let mut buffer = plaintext.to_vec();
                 let t = cipher.encrypt_in_place_detached(nonce, p.aad, &mut buffer)?;
                 tag.copy_from_slice(&t);
                 Ok(buffer)
@@ -73,7 +73,7 @@ impl Cipher {
             Cipher::Aes256GCM(cipher) => {
                 let nonce = Nonce::from_slice(iv);
                 // TODO: how can we access the TagSize associated type
-                let mut buffer = Vec::with_capacity(p.msg.len() + U16::to_usize());
+                let mut buffer = plaintext.to_vec();
                 let t = cipher.encrypt_in_place_detached(nonce, p.aad, &mut buffer)?;
                 tag.copy_from_slice(&t);
                 Ok(buffer)
@@ -91,7 +91,7 @@ impl Cipher {
             Cipher::Aes128GCM(cipher) => {
                 use aes_gcm::Tag;
                 let nonce = Nonce::from_slice(iv);
-                let mut buffer = Vec::with_capacity(cipher_text.len());
+                let mut buffer = cipher_text.to_vec();
                 let t = Tag::clone_from_slice(tag);
                 cipher.decrypt_in_place_detached(nonce, aad, &mut buffer, &t)?;
                 Ok(buffer)
@@ -99,7 +99,7 @@ impl Cipher {
             Cipher::Aes192GCM(cipher) => {
                 use aes_gcm::Tag;
                 let nonce = Nonce::from_slice(iv);
-                let mut buffer = Vec::with_capacity(cipher_text.len());
+                let mut buffer = cipher_text.to_vec();
                 let t = Tag::clone_from_slice(tag);
                 cipher.decrypt_in_place_detached(nonce, aad, &mut buffer, &t)?;
                 Ok(buffer)
@@ -107,7 +107,7 @@ impl Cipher {
             Cipher::Aes256GCM(cipher) => {
                 use aes_gcm::Tag;
                 let nonce = Nonce::from_slice(iv);
-                let mut buffer = Vec::with_capacity(cipher_text.len());
+                let mut buffer = cipher_text.to_vec();
                 let t = Tag::clone_from_slice(tag);
                 cipher.decrypt_in_place_detached(nonce, aad, &mut buffer, &t)?;
                 Ok(buffer)
@@ -520,7 +520,6 @@ mod tests {
             let src_key = util::random_bytes(enc.key_len());
             let mut out_header = header.clone();
             let encrypted_key = encrypter.encrypt(&src_key, &header, &mut out_header)?;
-
             let decrypter = alg.decrypter_from_jwk(&jwk)?;
             let dst_key = decrypter.decrypt(encrypted_key.as_deref(), &enc, &out_header)?;
 
