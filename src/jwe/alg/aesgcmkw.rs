@@ -80,7 +80,7 @@ impl Cipher {
             }
         }
     }
-    fn decrypt(
+    pub fn decrypt(
         &self,
         iv: &[u8],
         aad: &[u8],
