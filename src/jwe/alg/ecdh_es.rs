@@ -14,7 +14,7 @@ use openssl::{
 };
 use rsa::pkcs8::{
     der::{asn1::BitStringRef, Decode},
-    AlgorithmIdentifierRef, SubjectPublicKeyInfo, SubjectPublicKeyInfoRef,
+    SubjectPublicKeyInfoRef,
 };
 #[cfg(feature = "rustcrypto")]
 use sha2::{Digest, Sha256};
