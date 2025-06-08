@@ -3,9 +3,14 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
+#[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private, Public};
+#[cfg(feature = "openssl")]
 use openssl::rsa::Padding;
+#[cfg(feature = "rustcrypto")]
+use rsa::pkcs8::DecodePublicKey;
 
 use crate::jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader};
 use crate::jwk::{alg::rsa::RsaKeyPair, Jwk};
@@ -110,12 +115,23 @@ impl RsaesJweAlgorithm {
                     spki_der_vec.as_slice()
                 }
             };
-
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki_der)?;
-
-            let rsa = public_key.rsa()?;
-            if rsa.size() * 8 < 2048 {
-                bail!("key length must be 2048 or more.");
+            #[cfg(feature = "rustcrypto")]
+            let public_key = rsa::RsaPublicKey::from_public_key_der(&spki_der)?;
+            #[cfg(feature = "openssl")]
+            {
+                let rsa = public_key.rsa()?;
+                if rsa.size() * 8 < 2048 {
+                    bail!("key length must be 2048 or more.");
+                }
+            }
+            #[cfg(feature = "rustcrypto")]
+            {
+                use rsa::traits::PublicKeyParts;
+                if public_key.size() * 8 < 2048 {
+                    bail!("key length must be 2048 or more.");
+                }
             }
 
             Ok(RsaesJweEncrypter {
@@ -136,19 +152,36 @@ impl RsaesJweAlgorithm {
 
             let public_key = match alg.as_str() {
                 "PUBLIC KEY" => match RsaKeyPair::detect_pkcs8(&data, true) {
+                    #[cfg(feature = "openssl")]
                     Some(_) => PKey::public_key_from_der(&data)?,
+                    #[cfg(feature = "rustcrypto")]
+                    Some(_) => rsa::RsaPublicKey::from_public_key_der(&data)?,
                     None => bail!("Invalid PEM contents."),
                 },
                 "RSA PUBLIC KEY" => {
                     let pkcs8 = RsaKeyPair::to_pkcs8(&data, true);
-                    PKey::public_key_from_der(&pkcs8)?
+                    #[cfg(feature = "openssl")]
+                    let result = PKey::public_key_from_der(&pkcs8)?;
+                    #[cfg(feature = "rustcrypto")]
+                    let result = rsa::RsaPublicKey::from_public_key_der(&pkcs8)?;
+                    result
                 }
                 alg => bail!("Inappropriate algorithm: {}", alg),
             };
 
-            let rsa = public_key.rsa()?;
-            if rsa.size() * 8 < 2048 {
-                bail!("key length must be 2048 or more.");
+            #[cfg(feature = "openssl")]
+            {
+                let rsa = public_key.rsa()?;
+                if rsa.size() * 8 < 2048 {
+                    bail!("key length must be 2048 or more.");
+                }
+            }
+            #[cfg(feature = "rustcrypto")]
+            {
+                use rsa::traits::PublicKeyParts;
+                if public_key.size() * 8 < 2048 {
+                    bail!("key length must be 2048 or more.");
+                }
             }
 
             Ok(RsaesJweEncrypter {
@@ -200,11 +233,24 @@ impl RsaesJweAlgorithm {
             builder.end();
 
             let pkcs8 = RsaKeyPair::to_pkcs8(&builder.build(), true);
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(&pkcs8)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = rsa::RsaPublicKey::from_public_key_der(&pkcs8)?;
 
-            let rsa = public_key.rsa()?;
-            if rsa.size() * 8 < 2048 {
-                bail!("key length must be 2048 or more.");
+            #[cfg(feature = "openssl")]
+            {
+                let rsa = public_key.rsa()?;
+                if rsa.size() * 8 < 2048 {
+                    bail!("key length must be 2048 or more.");
+                }
+            }
+            #[cfg(feature = "rustcrypto")]
+            {
+                use rsa::traits::PublicKeyParts;
+                if public_key.size() * 8 < 2048 {
+                    bail!("key length must be 2048 or more.");
+                }
             }
 
             let key_id = jwk.key_id().map(|val| val.to_string());
@@ -310,7 +356,10 @@ impl Deref for RsaesJweAlgorithm {
 #[derive(Debug, Clone)]
 pub struct RsaesJweEncrypter {
     algorithm: RsaesJweAlgorithm,
+    #[cfg(feature = "openssl")]
     public_key: PKey<Public>,
+    #[cfg(feature = "rustcrypto")]
+    public_key: rsa::RsaPublicKey,
     key_id: Option<String>,
 }
 
@@ -353,35 +402,85 @@ impl JweEncrypter for RsaesJweEncrypter {
         _out_header: &mut JweHeader,
     ) -> Result<Option<Vec<u8>>, JoseError> {
         (|| -> anyhow::Result<Option<Vec<u8>>> {
+            #[cfg(feature = "openssl")]
             let rsa = self.public_key.rsa()?;
             let encrypted_key = match self.algorithm {
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::Rsa1_5 => {
                     let mut encrypted_key = vec![0; rsa.size() as usize];
                     let len = rsa.public_encrypt(&key, &mut encrypted_key, Padding::PKCS1)?;
                     encrypted_key.truncate(len);
                     encrypted_key
                 }
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::Rsa1_5 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::{traits::PaddingScheme, Pkcs1v15Encrypt};
+                    let encrypted_key =
+                        Pkcs1v15Encrypt.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    encrypted_key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep => {
                     let mut encrypted_key = vec![0; rsa.size() as usize];
                     let len = rsa.public_encrypt(&key, &mut encrypted_key, Padding::PKCS1_OAEP)?;
                     encrypted_key.truncate(len);
                     encrypted_key
                 }
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha1::Sha1>();
+                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    encrypted_key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep256 => openssl_rsa_oaep::pkey_public_encrypt(
                     &self.public_key,
                     &key,
                     MessageDigest::sha256(),
                 )?,
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep256 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha2::Sha256>();
+                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    encrypted_key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep384 => openssl_rsa_oaep::pkey_public_encrypt(
                     &self.public_key,
                     &key,
                     MessageDigest::sha384(),
                 )?,
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep384 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha2::Sha384>();
+                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    encrypted_key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep512 => openssl_rsa_oaep::pkey_public_encrypt(
                     &self.public_key,
                     &key,
                     MessageDigest::sha512(),
                 )?,
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep512 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha2::Sha512>();
+                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    encrypted_key
+                }
             };
 
             Ok(Some(encrypted_key))
@@ -405,7 +504,10 @@ impl Deref for RsaesJweEncrypter {
 #[derive(Debug, Clone)]
 pub struct RsaesJweDecrypter {
     algorithm: RsaesJweAlgorithm,
+    #[cfg(feature = "openssl")]
     private_key: PKey<Private>,
+    #[cfg(feature = "rustcrypto")]
+    private_key: rsa::RsaPrivateKey,
     key_id: Option<String>,
 }
 
@@ -443,36 +545,88 @@ impl JweDecrypter for RsaesJweDecrypter {
                 Some(val) => val,
                 None => bail!("A encrypted_key is required."),
             };
-
+            #[cfg(feature = "openssl")]
             let rsa = self.private_key.rsa()?;
             let key = match self.algorithm {
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::Rsa1_5 => {
                     let mut key = vec![0; rsa.size() as usize];
                     let len = rsa.private_decrypt(&encrypted_key, &mut key, Padding::PKCS1)?;
                     key.truncate(len);
                     key
                 }
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::Rsa1_5 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::{traits::PaddingScheme, Pkcs1v15Encrypt};
+                    let key = Pkcs1v15Encrypt.decrypt(
+                        Some(&mut OsRng),
+                        &self.private_key,
+                        &encrypted_key,
+                    )?;
+                    key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep => {
                     let mut key = vec![0; rsa.size() as usize];
                     let len = rsa.private_decrypt(&encrypted_key, &mut key, Padding::PKCS1_OAEP)?;
                     key.truncate(len);
                     key
                 }
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha1::Sha1>();
+                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep256 => openssl_rsa_oaep::pkey_private_decrypt(
                     &self.private_key,
                     &encrypted_key,
                     MessageDigest::sha256(),
                 )?,
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep256 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha2::Sha256>();
+                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep384 => openssl_rsa_oaep::pkey_private_decrypt(
                     &self.private_key,
                     &encrypted_key,
                     MessageDigest::sha384(),
                 )?,
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep384 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha2::Sha384>();
+                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    key
+                }
+                #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::RsaOaep512 => openssl_rsa_oaep::pkey_private_decrypt(
                     &self.private_key,
                     &encrypted_key,
                     MessageDigest::sha512(),
                 )?,
+                #[cfg(feature = "rustcrypto")]
+                RsaesJweAlgorithm::RsaOaep512 => {
+                    use aes_gcm::aead::OsRng;
+                    use rsa::traits::PaddingScheme;
+
+                    let oaep = rsa::Oaep::new::<sha2::Sha512>();
+                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    key
+                }
             };
 
             Ok(Cow::Owned(key))
@@ -550,6 +704,7 @@ mod tests {
     }
 }
 
+#[cfg(feature = "openssl")]
 mod openssl_rsa_oaep {
     use openssl::error::ErrorStack;
     use openssl::hash::MessageDigest;
