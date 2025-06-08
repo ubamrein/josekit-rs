@@ -92,10 +92,10 @@ impl PublicKey {
             PublicKey::P384(key) => Ok(key.to_sec1_bytes().to_vec()),
             PublicKey::P521(key) => Ok(key.to_sec1_bytes().to_vec()),
             PublicKey::K256(key) => Ok(key.to_sec1_bytes().to_vec()),
-            PublicKey::X25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes())),
-            PublicKey::X448(key) => Ok(ed448_public_to_ec_der(key.as_bytes())),
-            PublicKey::Ed25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes())),
-            PublicKey::Ed448(key) => Ok(ed448_public_to_ec_der(key.as_bytes())),
+            PublicKey::X25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes(), true)),
+            PublicKey::X448(key) => Ok(ed448_public_to_ec_der(key.as_bytes(), true)),
+            PublicKey::Ed25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes(), false)),
+            PublicKey::Ed448(key) => Ok(ed448_public_to_ec_der(key.as_bytes(), false)),
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
@@ -119,10 +119,10 @@ impl PublicKey {
     ) -> Result<Self, anyhow::Error> {
         Ok(match curve {
             EdCurve::Ed25519 => PublicKey::Ed25519(ed25519_dalek::VerifyingKey::from_bytes(
-                &ed25519_public_from_der(&spki)?,
+                &ed25519_public_from_der_spki(&spki)?,
             )?),
             EdCurve::Ed448 => PublicKey::Ed448(cx448::VerifyingKey::from_bytes(
-                &ed448_public_from_der(spki)?,
+                &ed448_public_from_der_spki(spki)?,
             )?),
         })
     }
@@ -193,10 +193,10 @@ impl PublicKey {
             },
             EcdhEsKeyType::Ecx(ecx_curve) => match ecx_curve {
                 EcxCurve::X25519 => PublicKey::X25519(x25519_dalek::PublicKey::from(
-                    ed25519_public_from_der(&spki)?,
+                    ed25519_public_from_der_spki(&spki)?,
                 )),
                 EcxCurve::X448 => PublicKey::X448(
-                    cx448::x448::PublicKey::from_bytes(&ed448_public_from_der(spki)?)
+                    cx448::x448::PublicKey::from_bytes(&ed448_public_from_der_spki(spki)?)
                         .context("x448 parsing failed")?,
                 ),
             },
@@ -277,7 +277,8 @@ impl Debug for PrivateKey {
         }
     }
 }
-pub fn ed25519_public_from_der(key_bytes: &[u8]) -> Result<[u8; 32], anyhow::Error> {
+pub fn ed25519_public_from_der_spki(key_bytes: &[u8]) -> Result<[u8; 32], anyhow::Error> {
+    println!("ed25519_public_from_der: {:?}", key_bytes.len());
     let spki = SubjectPublicKeyInfoRef::from_der(&key_bytes)?;
     if !spki.subject_public_key.raw_bytes().len() != 32 {
         return Err(anyhow::anyhow!("Invalid Ed25519 public key"));
@@ -286,7 +287,7 @@ pub fn ed25519_public_from_der(key_bytes: &[u8]) -> Result<[u8; 32], anyhow::Err
     x_bytes.copy_from_slice(&spki.subject_public_key.raw_bytes());
     Ok(x_bytes)
 }
-pub fn ed448_public_from_der(key_bytes: &[u8]) -> Result<[u8; 57], anyhow::Error> {
+pub fn ed448_public_from_der_spki(key_bytes: &[u8]) -> Result<[u8; 57], anyhow::Error> {
     let spki = SubjectPublicKeyInfoRef::from_der(&key_bytes)?;
     if !spki.subject_public_key.raw_bytes().len() != 57 {
         return Err(anyhow::anyhow!("Invalid Ed25519 public key"));
@@ -295,11 +296,16 @@ pub fn ed448_public_from_der(key_bytes: &[u8]) -> Result<[u8; 57], anyhow::Error
     x_bytes.copy_from_slice(&spki.subject_public_key.raw_bytes());
     Ok(x_bytes)
 }
-pub fn ed25519_public_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+pub fn ed25519_public_to_ec_der(key_bytes: &[u8], for_dh: bool) -> Vec<u8> {
     use rsa::pkcs8::{der::Encode, AlgorithmIdentifierRef, ObjectIdentifier};
+    let oid = if for_dh {
+        ObjectIdentifier::new_unwrap("1.3.101.110")
+    } else {
+        ObjectIdentifier::new_unwrap("1.3.101.112")
+    };
     let spki = SubjectPublicKeyInfoRef {
         algorithm: AlgorithmIdentifierRef {
-            oid: ObjectIdentifier::new_unwrap("1.3.101.110"),
+            oid,
             parameters: None,
         },
         subject_public_key: BitStringRef::from_bytes(key_bytes).unwrap(),
@@ -318,39 +324,49 @@ pub fn ed25519_private_from_der(der: &[u8]) -> Result<[u8; 32], anyhow::Error> {
     x_bytes.copy_from_slice(&pki.private_key[2..]);
     Ok(x_bytes)
 }
-pub fn ed25519_private_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+pub fn ed25519_private_to_ec_der(key_bytes: &[u8], for_dh: bool) -> Vec<u8> {
     use rsa::pkcs8::{
         der::{asn1::OctetString, Encode},
         AlgorithmIdentifierRef, ObjectIdentifier, PrivateKeyInfo,
     };
 
     let octet_string = OctetString::new(key_bytes).unwrap().to_der().unwrap();
-
+    let oid = if for_dh {
+        ObjectIdentifier::new_unwrap("1.3.101.110")
+    } else {
+        ObjectIdentifier::new_unwrap("1.3.101.112")
+    };
     let pki = PrivateKeyInfo::new(
         AlgorithmIdentifierRef {
-            oid: ObjectIdentifier::new_unwrap("1.3.101.110"),
+            oid,
             parameters: None,
         },
         &octet_string,
     );
     pki.to_der().unwrap()
 }
-pub fn ed448_public_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+pub fn ed448_public_to_ec_der(key_bytes: &[u8], for_dh: bool) -> Vec<u8> {
     use rsa::pkcs8::{der::Encode, AlgorithmIdentifierRef, ObjectIdentifier};
+    let oid = if for_dh {
+        ObjectIdentifier::new_unwrap("1.3.101.111")
+    } else {
+        ObjectIdentifier::new_unwrap("1.3.101.113")
+    };
     let spki = SubjectPublicKeyInfoRef {
         algorithm: AlgorithmIdentifierRef {
-            oid: ObjectIdentifier::new_unwrap("1.3.101.111"),
+            oid,
             parameters: None,
         },
         subject_public_key: BitStringRef::from_bytes(key_bytes).unwrap(),
     };
     spki.to_der().unwrap()
 }
-pub fn ed448_private_from_der(der: &[u8]) -> Result<[u8; 56], anyhow::Error> {
+pub fn x448_private_from_der(der: &[u8]) -> Result<[u8; 56], anyhow::Error> {
     use rsa::pkcs8::{der::Decode, PrivateKeyInfo};
 
     let pki: PrivateKeyInfo = PrivateKeyInfo::from_der(&der).unwrap();
-
+    println!("{:?}", pki.algorithm);
+    println!("{:?}", pki.private_key.len());
     if pki.private_key.len() != 58 {
         bail!("Invalid ed448 private key length");
     }
@@ -358,17 +374,34 @@ pub fn ed448_private_from_der(der: &[u8]) -> Result<[u8; 56], anyhow::Error> {
     x_bytes.copy_from_slice(&pki.private_key[2..]);
     Ok(x_bytes)
 }
-pub fn ed448_private_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+pub fn ed448_private_from_der(der: &[u8]) -> Result<[u8; 57], anyhow::Error> {
+    use rsa::pkcs8::{der::Decode, PrivateKeyInfo};
+
+    let pki: PrivateKeyInfo = PrivateKeyInfo::from_der(&der).unwrap();
+    println!("{:?}", pki.algorithm);
+    println!("{:?}", pki.private_key.len());
+    if pki.private_key.len() != 59 {
+        bail!("Invalid ed448 private key length");
+    }
+    let mut x_bytes: [u8; 57] = [0; 57];
+    x_bytes.copy_from_slice(&pki.private_key[2..]);
+    Ok(x_bytes)
+}
+pub fn ed448_private_to_ec_der(key_bytes: &[u8], for_dh: bool) -> Vec<u8> {
     use rsa::pkcs8::{
         der::{asn1::OctetString, Encode},
         AlgorithmIdentifierRef, ObjectIdentifier, PrivateKeyInfo,
     };
 
     let octet_string = OctetString::new(key_bytes).unwrap().to_der().unwrap();
-
+    let oid = if for_dh {
+        ObjectIdentifier::new_unwrap("1.3.101.111")
+    } else {
+        ObjectIdentifier::new_unwrap("1.3.101.113")
+    };
     let pki = PrivateKeyInfo::new(
         AlgorithmIdentifierRef {
-            oid: ObjectIdentifier::new_unwrap("1.3.101.111"),
+            oid,
             parameters: None,
         },
         &octet_string,
@@ -408,10 +441,10 @@ impl PrivateKey {
             PrivateKey::P384(key) => Ok(key.to_sec1_der()?.to_vec()),
             PrivateKey::P521(key) => Ok(key.to_sec1_der()?.to_vec()),
             PrivateKey::K256(key) => Ok(key.to_sec1_der()?.to_vec()),
-            PrivateKey::X25519(key) => Ok(ed25519_private_to_ec_der(key.as_bytes())),
-            PrivateKey::X448(key) => Ok(ed448_private_to_ec_der(key.as_bytes())),
-            PrivateKey::Ed25519(key) => Ok(ed25519_private_to_ec_der(key.as_bytes())),
-            PrivateKey::Ed448(key) => Ok(ed448_private_to_ec_der(key.as_bytes())),
+            PrivateKey::X25519(key) => Ok(ed25519_private_to_ec_der(key.as_bytes(), true)),
+            PrivateKey::X448(key) => Ok(ed448_private_to_ec_der(key.as_bytes(), true)),
+            PrivateKey::Ed25519(key) => Ok(ed25519_private_to_ec_der(key.as_bytes(), false)),
+            PrivateKey::Ed448(key) => Ok(ed448_private_to_ec_der(key.as_bytes(), false)),
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
@@ -456,15 +489,13 @@ impl PrivateKey {
         curve: EdCurve,
         pkcs8_der: &[u8],
     ) -> Result<Self, anyhow::Error> {
-        use rsa::pkcs8::DecodePrivateKey;
-
         Ok(match curve {
             EdCurve::Ed25519 => PrivateKey::Ed25519(ed25519_dalek::SigningKey::from(
-                ed25519_public_from_der(&pkcs8_der)?,
+                ed25519_private_from_der(&pkcs8_der)?,
             )),
-            EdCurve::Ed448 => {
-                PrivateKey::Ed448(cx448::SigningKey::from_pkcs8_der(&pkcs8_der).unwrap())
-            }
+            EdCurve::Ed448 => PrivateKey::Ed448(cx448::SigningKey::from(
+                cx448::SecretKey::from_slice(&ed448_private_from_der(&pkcs8_der)?),
+            )),
         })
     }
     pub fn from_pkcs8(key_type: EcdhEsKeyType, pkcs8_der: &[u8]) -> Result<Self, anyhow::Error> {
@@ -492,7 +523,7 @@ impl PrivateKey {
                     ed25519_private_from_der(&pkcs8_der)?,
                 )),
                 EcxCurve::X448 => PrivateKey::X448(
-                    cx448::x448::Secret::from_bytes(&ed448_private_from_der(&pkcs8_der)?).unwrap(),
+                    cx448::x448::Secret::from_bytes(&x448_private_from_der(&pkcs8_der)?).unwrap(),
                 ),
             },
         })

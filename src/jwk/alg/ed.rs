@@ -301,6 +301,11 @@ impl EdKeyPair {
             match reader.next() {
                 Ok(Some(DerType::ObjectIdentifier)) => {
                     if &reader.to_object_identifier().unwrap() != self.curve.oid() {
+                        println!(
+                            "{:?} != {:?}",
+                            reader.to_object_identifier().unwrap(),
+                            self.curve().oid()
+                        );
                         unreachable!("Invalid private key.");
                     }
                 }
@@ -349,6 +354,11 @@ impl EdKeyPair {
             match reader.next() {
                 Ok(Some(DerType::ObjectIdentifier)) => {
                     if &reader.to_object_identifier().unwrap() != self.curve.oid() {
+                        println!(
+                            "{:?} != {:?}",
+                            reader.to_object_identifier().unwrap(),
+                            self.curve().oid()
+                        );
                         unreachable!("Invalid private key.");
                     }
                 }
@@ -535,12 +545,16 @@ mod tests {
     fn test_ed_jwt() -> Result<()> {
         for curve in vec![EdCurve::Ed25519, EdCurve::Ed448] {
             let key_pair_1 = EdKeyPair::generate(curve)?;
+            println!("1");
             let der_private1 = key_pair_1.to_der_private_key();
             let der_public1 = key_pair_1.to_der_public_key();
+            println!("2");
 
             let jwk_key_pair_1 = key_pair_1.to_jwk_key_pair();
+            println!("3");
 
             let key_pair_2 = EdKeyPair::from_jwk(&jwk_key_pair_1)?;
+            println!("4");
             let der_private2 = key_pair_2.to_der_private_key();
             let der_public2 = key_pair_2.to_der_public_key();
 
