@@ -2,10 +2,16 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
+#[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private, Public};
+#[cfg(feature = "openssl")]
 use openssl::sign::{Signer, Verifier};
 
+#[cfg(feature = "rustcrypto")]
+use crate::jwe::alg::ecdh_es::{PrivateKey, PublicKey};
+use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
 use crate::jwk::{
     alg::ec::{EcCurve, EcKeyPair},
     Jwk,
@@ -148,7 +154,10 @@ impl EcdsaJwsAlgorithm {
                 }
             };
 
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = PublicKey::from_pkcs8_der_with_ec_curve(self.curve(), spki_der)?;
 
             Ok(EcdsaJwsVerifier {
                 algorithm: self.clone(),
@@ -183,7 +192,10 @@ impl EcdsaJwsAlgorithm {
                 alg => bail!("Inappropriate algorithm: {}", alg),
             };
 
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = PublicKey::from_pkcs8_der_with_ec_curve(self.curve(), spki)?;
 
             Ok(EcdsaJwsVerifier {
                 algorithm: self.clone(),
@@ -244,7 +256,10 @@ impl EcdsaJwsAlgorithm {
             vec.extend_from_slice(&y);
 
             let pkcs8 = EcKeyPair::to_pkcs8(&vec, true, self.curve());
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(&pkcs8)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = PublicKey::from_pkcs8_der_with_ec_curve(self.curve(), &pkcs8)?;
             let key_id = jwk.key_id().map(|val| val.to_string());
 
             Ok(EcdsaJwsVerifier {
@@ -315,7 +330,10 @@ impl Deref for EcdsaJwsAlgorithm {
 #[derive(Debug, Clone)]
 pub struct EcdsaJwsSigner {
     algorithm: EcdsaJwsAlgorithm,
+    #[cfg(feature = "openssl")]
     private_key: PKey<Private>,
+    #[cfg(feature = "rustcrypto")]
+    private_key: PrivateKey,
     key_id: Option<String>,
 }
 
@@ -353,9 +371,14 @@ impl JwsSigner for EcdsaJwsSigner {
                 HashAlgorithm::Sha384 => MessageDigest::sha384(),
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
+            #[cfg(feature = "openssl")]
             let mut signer = Signer::new(md, &self.private_key)?;
+            #[cfg(feature = "openssl")]
             signer.update(message)?;
+            #[cfg(feature = "openssl")]
             let der_signature = signer.sign_to_vec()?;
+            #[cfg(feature = "rustcrypto")]
+            let der_signature = self.private_key.sign(message)?;
 
             let signature_len = self.signature_len();
             let sep = signature_len / 2;
@@ -400,7 +423,10 @@ impl Deref for EcdsaJwsSigner {
 #[derive(Debug, Clone)]
 pub struct EcdsaJwsVerifier {
     algorithm: EcdsaJwsAlgorithm,
+    #[cfg(feature = "openssl")]
     public_key: PKey<Public>,
+    #[cfg(feature = "rustcrypto")]
+    public_key: PublicKey,
     key_id: Option<String>,
 }
 
@@ -456,9 +482,20 @@ impl JwsVerifier for EcdsaJwsVerifier {
                 HashAlgorithm::Sha384 => MessageDigest::sha384(),
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
+            #[cfg(feature = "openssl")]
             let mut verifier = Verifier::new(md, &self.public_key)?;
+            #[cfg(feature = "openssl")]
             verifier.update(message)?;
+            #[cfg(feature = "openssl")]
             if !verifier.verify(&der_signature)? {
+                bail!("The signature does not match.");
+            }
+            #[cfg(feature = "rustcrypto")]
+            if !self
+                .public_key
+                .verify_signature(&message, &der_signature)
+                .is_ok()
+            {
                 bail!("The signature does not match.");
             }
             Ok(())

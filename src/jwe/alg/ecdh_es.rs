@@ -106,6 +106,38 @@ impl PublicKey {
             PublicKey::Ed448(key) => todo!("JWK not implemented for ed448"),
         }
     }
+    pub fn from_pkcs8_der_with_ec_curve(
+        curve: EcCurve,
+        spki: &[u8],
+    ) -> Result<Self, anyhow::Error> {
+        use anyhow::Context;
+        Ok(match curve {
+            EcCurve::P256 => {
+                use p256::pkcs8::DecodePublicKey;
+                PublicKey::P256(
+                    p256::PublicKey::from_public_key_der(&spki).context("p256 parsing failed")?,
+                )
+            }
+            EcCurve::P384 => {
+                use p384::pkcs8::DecodePublicKey;
+                PublicKey::P384(
+                    p384::PublicKey::from_public_key_der(&spki).context("p384 parsing failed")?,
+                )
+            }
+            EcCurve::P521 => {
+                use p521::pkcs8::DecodePublicKey;
+                PublicKey::P521(
+                    p521::PublicKey::from_public_key_der(&spki).context("p521 parsing failed")?,
+                )
+            }
+            EcCurve::Secp256k1 => {
+                use k256::pkcs8::DecodePublicKey;
+                PublicKey::K256(
+                    k256::PublicKey::from_public_key_der(&spki).context("k256 parsing failed")?,
+                )
+            }
+        })
+    }
     pub fn from_pkcs8_der(key_type: EcdhEsKeyType, spki: &[u8]) -> Result<Self, anyhow::Error> {
         use anyhow::Context;
         Ok(match key_type {
@@ -153,6 +185,53 @@ impl PublicKey {
                 ),
             },
         })
+    }
+    pub fn verify_signature(&self, msg: &[u8], signature: &[u8]) -> Result<(), anyhow::Error> {
+        match self {
+            PublicKey::P256(public_key) => {
+                use p256::ecdsa::signature::Verifier;
+                let signature = p256::ecdsa::Signature::from_der(signature)?;
+                let verifying_key: p256::ecdsa::VerifyingKey = public_key.into();
+                verifying_key.verify(msg, &signature)?;
+                Ok(())
+            }
+            PublicKey::P384(public_key) => {
+                use p384::ecdsa::signature::Verifier;
+                let signature = p384::ecdsa::Signature::from_der(signature)?;
+                let verifying_key: p384::ecdsa::VerifyingKey = public_key.into();
+                verifying_key.verify(msg, &signature)?;
+                Ok(())
+            }
+            PublicKey::P521(public_key) => {
+                use p521::ecdsa::signature::Verifier;
+                let signature = p521::ecdsa::Signature::from_der(signature)?;
+                let verifying_key: p521::ecdsa::VerifyingKey =
+                    p521::ecdsa::VerifyingKey::from_affine(public_key.as_affine().to_owned())?;
+                verifying_key.verify(msg, &signature)?;
+                Ok(())
+            }
+            PublicKey::K256(public_key) => {
+                use k256::ecdsa::signature::Verifier;
+                let signature = k256::ecdsa::Signature::from_der(signature)?;
+                let verifying_key: k256::ecdsa::VerifyingKey = public_key.into();
+                verifying_key.verify(msg, &signature)?;
+                Ok(())
+            }
+            PublicKey::X25519(_) => unimplemented!("x25519 is a DH protocol"),
+            PublicKey::X448(_) => unimplemented!("x25519 is a DH protocol"),
+            PublicKey::Ed25519(verifying_key) => {
+                use ed25519_dalek::Verifier;
+                let signature = ed25519_dalek::Signature::from_slice(signature)?;
+                verifying_key.verify(msg, &signature)?;
+                Ok(())
+            }
+            PublicKey::Ed448(verifying_key) => {
+                use cx448::crypto_signature::Verifier;
+                let signature = cx448::Signature::try_from(signature)?;
+                verifying_key.verify(msg, &signature)?;
+                Ok(())
+            }
+        }
     }
 }
 #[cfg(feature = "rustcrypto")]
@@ -363,6 +442,48 @@ impl PrivateKey {
                 bail!("Public/Private key type mismatch")
             }
         }
+    }
+    pub fn sign(&self, msg: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+        Ok(match self {
+            PrivateKey::P256(secret_key) => {
+                use p256::ecdsa::signature::SignerMut;
+                let mut s: p256::ecdsa::SigningKey = secret_key.into();
+                let signature: p256::ecdsa::Signature = s.sign(msg);
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::P384(secret_key) => {
+                use p384::ecdsa::signature::SignerMut;
+                let mut s: p384::ecdsa::SigningKey = secret_key.into();
+                let signature: p384::ecdsa::Signature = s.sign(msg);
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::P521(secret_key) => {
+                use p521::ecdsa::signature::SignerMut;
+                let mut s: p521::ecdsa::SigningKey = p521::ecdsa::SigningKey::from_slice(
+                    secret_key.to_nonzero_scalar().to_bytes().as_slice(),
+                )?;
+                let signature: p521::ecdsa::Signature = s.sign(msg);
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::K256(secret_key) => {
+                use k256::ecdsa::signature::SignerMut;
+                let mut s: k256::ecdsa::SigningKey = secret_key.into();
+                let signature: k256::ecdsa::Signature = s.sign(msg);
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::X25519(_) => unimplemented!("x25519 is DH algorithm"),
+            PrivateKey::X448(_) => unimplemented!("x448 is DH algorithm"),
+            PrivateKey::Ed25519(signing_key) => {
+                use ed25519_dalek::Signer;
+                let signature: ed25519_dalek::Signature = signing_key.sign(msg);
+                signature.to_bytes().to_vec()
+            }
+            PrivateKey::Ed448(signing_key) => {
+                use cx448::crypto_signature::Signer;
+                let signature: cx448::Signature = signing_key.sign(msg);
+                signature.to_bytes().to_vec()
+            }
+        })
     }
 }
 
