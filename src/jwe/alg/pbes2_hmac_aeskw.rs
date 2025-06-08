@@ -35,6 +35,7 @@ pub enum MessageDigest {
     Sha512(Sha512),
 }
 #[cfg(feature = "rustcrypto")]
+#[derive(Debug, Clone)]
 pub enum Hmac {
     HmacSha1(hmac::Hmac<Sha1>),
     HmacSha256(hmac::Hmac<Sha256>),
