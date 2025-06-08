@@ -71,10 +71,10 @@ impl AesKey {
                 .unwrap(encrypted_key, key)
                 .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e)),
             AesKey::Aes192(aes) => aes
-                .wrap(encrypted_key, key)
+                .unwrap(encrypted_key, key)
                 .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e)),
             AesKey::Aes256(aes) => aes
-                .wrap(encrypted_key, key)
+                .unwrap(encrypted_key, key)
                 .map_err(|e| anyhow::anyhow!("Failed to set encrypt key: {}", e)),
         }
     }
@@ -470,6 +470,8 @@ mod tests {
             let src_key = util::random_bytes(enc.key_len());
             let mut out_header = header.clone();
             let encrypted_key = encrypter.encrypt(&src_key, &header, &mut out_header)?;
+
+            println!("{alg:?} {:?}", encrypted_key);
 
             let decrypter = alg.decrypter_from_jwk(&jwk)?;
             let dst_key = decrypter.decrypt(encrypted_key.as_deref(), &enc, &out_header)?;
