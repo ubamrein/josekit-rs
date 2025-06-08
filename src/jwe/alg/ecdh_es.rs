@@ -106,6 +106,29 @@ impl PublicKey {
             PublicKey::Ed448(key) => todo!("JWK not implemented for ed448"),
         }
     }
+    pub fn from_pkcs8_der_with_ed_curve(
+        curve: EdCurve,
+        spki: &[u8],
+    ) -> Result<Self, anyhow::Error> {
+        Ok(match curve {
+            EdCurve::Ed25519 => {
+                if spki.len() != 32 {
+                    bail!("Invalid x25519 public key length");
+                }
+                let mut x_bytes: [u8; 32] = [0; 32];
+                x_bytes.copy_from_slice(&spki);
+                PublicKey::Ed25519(ed25519_dalek::VerifyingKey::from_bytes(&x_bytes)?)
+            }
+            EdCurve::Ed448 => {
+                if spki.len() != 57 {
+                    bail!("Invalid x25519 public key length");
+                }
+                let mut x_bytes: [u8; 57] = [0; 57];
+                x_bytes.copy_from_slice(&spki);
+                PublicKey::Ed448(cx448::VerifyingKey::from_bytes(&x_bytes)?)
+            }
+        })
+    }
     pub fn from_pkcs8_der_with_ec_curve(
         curve: EcCurve,
         spki: &[u8],

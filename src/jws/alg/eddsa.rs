@@ -2,9 +2,13 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private, Public};
+#[cfg(feature = "openssl")]
 use openssl::sign::{Signer, Verifier};
 
+#[cfg(feature = "rustcrypto")]
+use crate::jwe::alg::ecdh_es::{PrivateKey, PublicKey};
 use crate::jwk::{
     alg::ed::{EdCurve, EdKeyPair},
     Jwk,
@@ -134,12 +138,15 @@ impl EddsaJwsAlgorithm {
         input: impl AsRef<[u8]>,
     ) -> Result<EddsaJwsVerifier, JoseError> {
         (|| -> anyhow::Result<EddsaJwsVerifier> {
-            let spki_der = match EdKeyPair::detect_pkcs8(input.as_ref(), true) {
-                Some(_) => input.as_ref(),
+            let (spki_der, curve) = match EdKeyPair::detect_pkcs8(input.as_ref(), true) {
+                Some(curve) => (input.as_ref(), curve),
                 None => bail!("The EdDSA public key must be wrapped by PKCS#8 format."),
             };
 
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = PublicKey::from_pkcs8_der_with_ed_curve(curve, spki_der)?;
 
             Ok(EddsaJwsVerifier {
                 algorithm: self.clone(),
@@ -163,9 +170,9 @@ impl EddsaJwsAlgorithm {
     ) -> Result<EddsaJwsVerifier, JoseError> {
         (|| -> anyhow::Result<EddsaJwsVerifier> {
             let (alg, data) = util::parse_pem(input.as_ref())?;
-            let spki_der = match alg.as_str() {
+            let (spki_der, curve) = match alg.as_str() {
                 "PUBLIC KEY" => match EdKeyPair::detect_pkcs8(&data, true) {
-                    Some(_) => data.as_slice(),
+                    Some(curve) => (data.as_slice(), curve),
                     None => bail!(
                         "The EdDSA public key must be wrapped by SubjectPublicKeyInfo format."
                     ),
@@ -173,7 +180,10 @@ impl EddsaJwsAlgorithm {
                 alg => bail!("Unacceptable algorithm: {}", alg),
             };
 
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = PublicKey::from_pkcs8_der_with_ed_curve(curve, spki_der)?;
 
             Ok(EddsaJwsVerifier {
                 algorithm: self.clone(),
@@ -221,7 +231,10 @@ impl EddsaJwsAlgorithm {
             };
 
             let pkcs8 = EdKeyPair::to_pkcs8(&x, true, curve);
+            #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(&pkcs8)?;
+            #[cfg(feature = "rustcrypto")]
+            let public_key = PublicKey::from_pkcs8_der_with_ed_curve(curve, &pkcs8)?;
             let key_id = jwk.key_id().map(|val| val.to_string());
 
             Ok(EddsaJwsVerifier {
@@ -262,7 +275,10 @@ impl Deref for EddsaJwsAlgorithm {
 pub struct EddsaJwsSigner {
     algorithm: EddsaJwsAlgorithm,
     curve: EdCurve,
+    #[cfg(feature = "openssl")]
     private_key: PKey<Private>,
+    #[cfg(feature = "rustcrypto")]
+    private_key: PrivateKey,
     key_id: Option<String>,
 }
 
@@ -297,9 +313,14 @@ impl JwsSigner for EddsaJwsSigner {
 
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError> {
         (|| -> anyhow::Result<Vec<u8>> {
+            #[cfg(feature = "openssl")]
             let mut signer = Signer::new_without_digest(&self.private_key)?;
+            #[cfg(feature = "openssl")]
             let mut signature = vec![0; signer.len()?];
+            #[cfg(feature = "openssl")]
             signer.sign_oneshot(&mut signature, message)?;
+            #[cfg(feature = "rustcrypto")]
+            let signature = self.private_key.sign(&message)?;
             Ok(signature)
         })()
         .map_err(|err| JoseError::InvalidSignature(err))
@@ -321,7 +342,10 @@ impl Deref for EddsaJwsSigner {
 #[derive(Debug, Clone)]
 pub struct EddsaJwsVerifier {
     algorithm: EddsaJwsAlgorithm,
+    #[cfg(feature = "openssl")]
     public_key: PKey<Public>,
+    #[cfg(feature = "rustcrypto")]
+    public_key: PublicKey,
     key_id: Option<String>,
 }
 
@@ -349,8 +373,18 @@ impl JwsVerifier for EddsaJwsVerifier {
 
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), JoseError> {
         (|| -> anyhow::Result<()> {
+            #[cfg(feature = "openssl")]
             let mut verifier = Verifier::new_without_digest(&self.public_key)?;
+            #[cfg(feature = "openssl")]
             if !verifier.verify_oneshot(signature, message)? {
+                bail!("The signature does not match.")
+            }
+            #[cfg(feature = "rustcrypto")]
+            if self
+                .public_key
+                .verify_signature(message, signature)
+                .is_err()
+            {
                 bail!("The signature does not match.")
             }
             Ok(())
