@@ -341,7 +341,6 @@ impl JweEncrypter for Pbes2HmacAeskwJweEncrypter {
             pkcs5::pbkdf2_hmac(&self.private_key, &salt, p2c, md, &mut derived_key)?;
             #[cfg(feature = "rustcrypto")]
             md.pbkdf2(&self.private_key, &salt, p2c as u32, &mut derived_key);
-            #[cfg(feature = "rustcrypto")]
             let aes = match AesKey::new_encrypt(&derived_key) {
                 Ok(val) => val,
                 Err(_) => bail!("Failed to set a encryption key."),
