@@ -12,6 +12,10 @@ use openssl::{
     hash::{Hasher, MessageDigest},
     pkey::{PKey, Private, Public},
 };
+use rsa::pkcs8::{
+    der::{asn1::BitStringRef, Decode},
+    AlgorithmIdentifierRef, SubjectPublicKeyInfo, SubjectPublicKeyInfoRef,
+};
 #[cfg(feature = "rustcrypto")]
 use sha2::{Digest, Sha256};
 
@@ -21,7 +25,6 @@ use crate::{
     jwk::alg::ed::EdCurve,
 };
 
-use crate::jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader};
 use crate::jwk::alg::{
     ec::{EcCurve, EcKeyPair},
     ecx::{EcxCurve, EcxKeyPair},
@@ -32,6 +35,10 @@ use crate::util::der::{DerReader, DerType};
 use crate::util::oid::{
     OID_ID_EC_PUBLIC_KEY, OID_PRIME256V1, OID_SECP256K1, OID_SECP384R1, OID_SECP521R1, OID_X25519,
     OID_X448,
+};
+use crate::{
+    jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader},
+    util::oid::ObjectIdentifier,
 };
 use crate::{JoseError, JoseHeader, Map, Value};
 
@@ -85,10 +92,10 @@ impl PublicKey {
             PublicKey::P384(key) => Ok(key.to_sec1_bytes().to_vec()),
             PublicKey::P521(key) => Ok(key.to_sec1_bytes().to_vec()),
             PublicKey::K256(key) => Ok(key.to_sec1_bytes().to_vec()),
-            PublicKey::X25519(key) => Ok(key.to_bytes().to_vec()),
-            PublicKey::X448(key) => Ok(key.as_bytes().to_vec()),
-            PublicKey::Ed25519(key) => Ok(key.to_bytes().to_vec()),
-            PublicKey::Ed448(key) => Ok(key.as_bytes().to_vec()),
+            PublicKey::X25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes())),
+            PublicKey::X448(key) => Ok(ed448_public_to_ec_der(key.as_bytes())),
+            PublicKey::Ed25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes())),
+            PublicKey::Ed448(key) => Ok(ed448_public_to_ec_der(key.as_bytes())),
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
@@ -111,22 +118,12 @@ impl PublicKey {
         spki: &[u8],
     ) -> Result<Self, anyhow::Error> {
         Ok(match curve {
-            EdCurve::Ed25519 => {
-                if spki.len() != 32 {
-                    bail!("Invalid x25519 public key length");
-                }
-                let mut x_bytes: [u8; 32] = [0; 32];
-                x_bytes.copy_from_slice(&spki);
-                PublicKey::Ed25519(ed25519_dalek::VerifyingKey::from_bytes(&x_bytes)?)
-            }
-            EdCurve::Ed448 => {
-                if spki.len() != 57 {
-                    bail!("Invalid x25519 public key length");
-                }
-                let mut x_bytes: [u8; 57] = [0; 57];
-                x_bytes.copy_from_slice(&spki);
-                PublicKey::Ed448(cx448::VerifyingKey::from_bytes(&x_bytes)?)
-            }
+            EdCurve::Ed25519 => PublicKey::Ed25519(ed25519_dalek::VerifyingKey::from_bytes(
+                &ed25519_public_from_der(&spki)?,
+            )?),
+            EdCurve::Ed448 => PublicKey::Ed448(cx448::VerifyingKey::from_bytes(
+                &ed448_public_from_der(spki)?,
+            )?),
         })
     }
     pub fn from_pkcs8_der_with_ec_curve(
@@ -195,16 +192,12 @@ impl PublicKey {
                 }
             },
             EcdhEsKeyType::Ecx(ecx_curve) => match ecx_curve {
-                EcxCurve::X25519 => {
-                    if spki.len() != 32 {
-                        bail!("Invalid x25519 public key length");
-                    }
-                    let mut x_bytes: [u8; 32] = [0; 32];
-                    x_bytes.copy_from_slice(&spki);
-                    PublicKey::X25519(x25519_dalek::PublicKey::from(x_bytes))
-                }
+                EcxCurve::X25519 => PublicKey::X25519(x25519_dalek::PublicKey::from(
+                    ed25519_public_from_der(&spki)?,
+                )),
                 EcxCurve::X448 => PublicKey::X448(
-                    cx448::x448::PublicKey::from_bytes(spki).context("x448 parsing failed")?,
+                    cx448::x448::PublicKey::from_bytes(&ed448_public_from_der(spki)?)
+                        .context("x448 parsing failed")?,
                 ),
             },
         })
@@ -284,6 +277,104 @@ impl Debug for PrivateKey {
         }
     }
 }
+pub fn ed25519_public_from_der(key_bytes: &[u8]) -> Result<[u8; 32], anyhow::Error> {
+    let spki = SubjectPublicKeyInfoRef::from_der(&key_bytes)?;
+    if !spki.subject_public_key.raw_bytes().len() != 32 {
+        return Err(anyhow::anyhow!("Invalid Ed25519 public key"));
+    }
+    let mut x_bytes = [0; 32];
+    x_bytes.copy_from_slice(&spki.subject_public_key.raw_bytes());
+    Ok(x_bytes)
+}
+pub fn ed448_public_from_der(key_bytes: &[u8]) -> Result<[u8; 57], anyhow::Error> {
+    let spki = SubjectPublicKeyInfoRef::from_der(&key_bytes)?;
+    if !spki.subject_public_key.raw_bytes().len() != 57 {
+        return Err(anyhow::anyhow!("Invalid Ed25519 public key"));
+    }
+    let mut x_bytes = [0; 57];
+    x_bytes.copy_from_slice(&spki.subject_public_key.raw_bytes());
+    Ok(x_bytes)
+}
+pub fn ed25519_public_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+    use rsa::pkcs8::{der::Encode, AlgorithmIdentifierRef, ObjectIdentifier};
+    let spki = SubjectPublicKeyInfoRef {
+        algorithm: AlgorithmIdentifierRef {
+            oid: ObjectIdentifier::new_unwrap("1.3.101.110"),
+            parameters: None,
+        },
+        subject_public_key: BitStringRef::from_bytes(key_bytes).unwrap(),
+    };
+    spki.to_der().unwrap()
+}
+pub fn ed25519_private_from_der(der: &[u8]) -> Result<[u8; 32], anyhow::Error> {
+    use rsa::pkcs8::{der::Decode, PrivateKeyInfo};
+
+    let pki: PrivateKeyInfo = PrivateKeyInfo::from_der(&der).unwrap();
+
+    if pki.private_key.len() != 34 {
+        bail!("Invalid x25519 private key length");
+    }
+    let mut x_bytes: [u8; 32] = [0; 32];
+    x_bytes.copy_from_slice(&pki.private_key[2..]);
+    Ok(x_bytes)
+}
+pub fn ed25519_private_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+    use rsa::pkcs8::{
+        der::{asn1::OctetString, Encode},
+        AlgorithmIdentifierRef, ObjectIdentifier, PrivateKeyInfo,
+    };
+
+    let octet_string = OctetString::new(key_bytes).unwrap().to_der().unwrap();
+
+    let pki = PrivateKeyInfo::new(
+        AlgorithmIdentifierRef {
+            oid: ObjectIdentifier::new_unwrap("1.3.101.110"),
+            parameters: None,
+        },
+        &octet_string,
+    );
+    pki.to_der().unwrap()
+}
+pub fn ed448_public_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+    use rsa::pkcs8::{der::Encode, AlgorithmIdentifierRef, ObjectIdentifier};
+    let spki = SubjectPublicKeyInfoRef {
+        algorithm: AlgorithmIdentifierRef {
+            oid: ObjectIdentifier::new_unwrap("1.3.101.111"),
+            parameters: None,
+        },
+        subject_public_key: BitStringRef::from_bytes(key_bytes).unwrap(),
+    };
+    spki.to_der().unwrap()
+}
+pub fn ed448_private_from_der(der: &[u8]) -> Result<[u8; 56], anyhow::Error> {
+    use rsa::pkcs8::{der::Decode, PrivateKeyInfo};
+
+    let pki: PrivateKeyInfo = PrivateKeyInfo::from_der(&der).unwrap();
+
+    if pki.private_key.len() != 58 {
+        bail!("Invalid ed448 private key length");
+    }
+    let mut x_bytes: [u8; 56] = [0; 56];
+    x_bytes.copy_from_slice(&pki.private_key[2..]);
+    Ok(x_bytes)
+}
+pub fn ed448_private_to_ec_der(key_bytes: &[u8]) -> Vec<u8> {
+    use rsa::pkcs8::{
+        der::{asn1::OctetString, Encode},
+        AlgorithmIdentifierRef, ObjectIdentifier, PrivateKeyInfo,
+    };
+
+    let octet_string = OctetString::new(key_bytes).unwrap().to_der().unwrap();
+
+    let pki = PrivateKeyInfo::new(
+        AlgorithmIdentifierRef {
+            oid: ObjectIdentifier::new_unwrap("1.3.101.111"),
+            parameters: None,
+        },
+        &octet_string,
+    );
+    pki.to_der().unwrap()
+}
 
 #[cfg(feature = "rustcrypto")]
 impl PrivateKey {
@@ -317,10 +408,10 @@ impl PrivateKey {
             PrivateKey::P384(key) => Ok(key.to_sec1_der()?.to_vec()),
             PrivateKey::P521(key) => Ok(key.to_sec1_der()?.to_vec()),
             PrivateKey::K256(key) => Ok(key.to_sec1_der()?.to_vec()),
-            PrivateKey::X25519(key) => Ok(key.to_bytes().to_vec()),
-            PrivateKey::X448(key) => Ok(key.as_bytes().to_vec()),
-            PrivateKey::Ed25519(key) => Ok(key.to_bytes().to_vec()),
-            PrivateKey::Ed448(key) => Ok(key.as_bytes().to_vec()),
+            PrivateKey::X25519(key) => Ok(ed25519_private_to_ec_der(key.as_bytes())),
+            PrivateKey::X448(key) => Ok(ed448_private_to_ec_der(key.as_bytes())),
+            PrivateKey::Ed25519(key) => Ok(ed25519_private_to_ec_der(key.as_bytes())),
+            PrivateKey::Ed448(key) => Ok(ed448_private_to_ec_der(key.as_bytes())),
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
@@ -368,14 +459,9 @@ impl PrivateKey {
         use rsa::pkcs8::DecodePrivateKey;
 
         Ok(match curve {
-            EdCurve::Ed25519 => {
-                if pkcs8_der.len() != 32 {
-                    bail!("Invalid x25519 public key length");
-                }
-                let mut x_bytes: [u8; 32] = [0; 32];
-                x_bytes.copy_from_slice(&pkcs8_der);
-                PrivateKey::Ed25519(ed25519_dalek::SigningKey::from(x_bytes))
-            }
+            EdCurve::Ed25519 => PrivateKey::Ed25519(ed25519_dalek::SigningKey::from(
+                ed25519_public_from_der(&pkcs8_der)?,
+            )),
             EdCurve::Ed448 => {
                 PrivateKey::Ed448(cx448::SigningKey::from_pkcs8_der(&pkcs8_der).unwrap())
             }
@@ -402,17 +488,12 @@ impl PrivateKey {
                 }
             },
             EcdhEsKeyType::Ecx(ecx_curve) => match ecx_curve {
-                EcxCurve::X25519 => {
-                    if pkcs8_der.len() != 32 {
-                        bail!("Invalid x25519 public key length");
-                    }
-                    let mut x_bytes: [u8; 32] = [0; 32];
-                    x_bytes.copy_from_slice(&pkcs8_der);
-                    PrivateKey::X25519(x25519_dalek::StaticSecret::from(x_bytes))
-                }
-                EcxCurve::X448 => {
-                    PrivateKey::X448(cx448::x448::Secret::from_bytes(&pkcs8_der).unwrap())
-                }
+                EcxCurve::X25519 => PrivateKey::X25519(x25519_dalek::StaticSecret::from(
+                    ed25519_private_from_der(&pkcs8_der)?,
+                )),
+                EcxCurve::X448 => PrivateKey::X448(
+                    cx448::x448::Secret::from_bytes(&ed448_private_from_der(&pkcs8_der)?).unwrap(),
+                ),
             },
         })
     }
