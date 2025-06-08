@@ -103,6 +103,14 @@ impl MessageDigest {
             }
         })
     }
+    pub fn hash(&self, data: &[u8]) -> Vec<u8> {
+        match self {
+            MessageDigest::Sha1(_) => sha1::Sha1::digest(data).to_vec(),
+            MessageDigest::Sha256(_) => sha2::Sha256::digest(data).to_vec(),
+            MessageDigest::Sha384(_) => sha2::Sha384::digest(data).to_vec(),
+            MessageDigest::Sha512(_) => sha2::Sha512::digest(data).to_vec(),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
