@@ -10,6 +10,10 @@ use crate::jwk::Jwk;
 use crate::util::{self, HashAlgorithm};
 use crate::{JoseError, JoseHeader, Number, Value};
 use anyhow::bail;
+#[cfg(feature = "rustcrypto")]
+use hmac::digest;
+#[cfg(feature = "rustcrypto")]
+use hmac::digest::core_api::CoreProxy;
 #[cfg(feature = "openssl")]
 use openssl::aes::{self, AesKey};
 #[cfg(feature = "openssl")]
@@ -29,6 +33,34 @@ pub enum MessageDigest {
     Sha256(Sha256),
     Sha384(Sha384),
     Sha512(Sha512),
+}
+#[cfg(feature = "rustcrypto")]
+pub enum Hmac {
+    HmacSha1(hmac::Hmac<Sha1>),
+    HmacSha256(hmac::Hmac<Sha256>),
+    HmacSha384(hmac::Hmac<Sha384>),
+    HmacSha512(hmac::Hmac<Sha512>),
+}
+#[cfg(feature = "rustcrypto")]
+impl Hmac {
+    pub fn update(&mut self, data: &[u8]) -> Result<(), anyhow::Error> {
+        use hmac::digest::Update;
+        Ok(match self {
+            Hmac::HmacSha1(ref mut hmac) => hmac.update(data),
+            Hmac::HmacSha256(ref mut hmac) => hmac.update(data),
+            Hmac::HmacSha384(ref mut hmac) => hmac.update(data),
+            Hmac::HmacSha512(ref mut hmac) => hmac.update(data),
+        })
+    }
+    pub fn sign_to_vec(self) -> Result<Vec<u8>, anyhow::Error> {
+        use hmac::Mac;
+        Ok(match self {
+            Hmac::HmacSha1(hmac) => hmac.finalize().into_bytes().to_vec(),
+            Hmac::HmacSha256(hmac) => hmac.finalize().into_bytes().to_vec(),
+            Hmac::HmacSha384(hmac) => hmac.finalize().into_bytes().to_vec(),
+            Hmac::HmacSha512(hmac) => hmac.finalize().into_bytes().to_vec(),
+        })
+    }
 }
 #[cfg(feature = "rustcrypto")]
 impl MessageDigest {
@@ -51,6 +83,24 @@ impl MessageDigest {
             MessageDigest::Sha384(_) => pbkdf2::pbkdf2_hmac::<Sha384>(password, salt, rounds, res),
             MessageDigest::Sha512(_) => pbkdf2::pbkdf2_hmac::<Sha512>(password, salt, rounds, res),
         };
+    }
+    pub fn hmac(&self, key: &[u8]) -> Result<self::Hmac, anyhow::Error> {
+        use hmac::Mac;
+
+        Ok(match self {
+            MessageDigest::Sha1(_) => {
+                self::Hmac::HmacSha1(hmac::Hmac::<Sha1>::new_from_slice(key)?)
+            }
+            MessageDigest::Sha256(_) => {
+                self::Hmac::HmacSha256(hmac::Hmac::<Sha256>::new_from_slice(key)?)
+            }
+            MessageDigest::Sha384(_) => {
+                self::Hmac::HmacSha384(hmac::Hmac::<Sha384>::new_from_slice(key)?)
+            }
+            MessageDigest::Sha512(_) => {
+                self::Hmac::HmacSha512(hmac::Hmac::<Sha512>::new_from_slice(key)?)
+            }
+        })
     }
 }
 
