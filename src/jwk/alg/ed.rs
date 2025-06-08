@@ -217,7 +217,7 @@ impl EdKeyPair {
 
             let pkcs8 = Self::to_pkcs8(&builder.build(), false, curve);
             #[cfg(feature = "openssl")]
-            let private_key = PKey::private_key_from_der(pkcs8)?;
+            let private_key = PKey::private_key_from_der(&pkcs8)?;
             #[cfg(feature = "rustcrypto")]
             let private_key = PrivateKey::from_pkcs8_for_ed_curve(curve, &pkcs8)?;
             let algorithm = jwk.algorithm().map(|val| val.to_string());

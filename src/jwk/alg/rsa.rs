@@ -1,8 +1,16 @@
 use std::ops::Deref;
 
+#[cfg(feature = "rustcrypto")]
+use aes_gcm::aead::OsRng;
 use anyhow::bail;
+#[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private};
+#[cfg(feature = "openssl")]
 use openssl::rsa::Rsa;
+#[cfg(feature = "rustcrypto")]
+use rsa::pkcs8::DecodePrivateKey;
+#[cfg(feature = "rustcrypto")]
+use rsa::traits::{PrivateKeyParts, PublicKeyParts};
 
 use crate::jwk::{alg::rsapss::RsaPssKeyPair, Jwk, KeyPair};
 use crate::util::der::{DerBuilder, DerReader, DerType};
@@ -12,7 +20,10 @@ use crate::{JoseError, Value};
 
 #[derive(Debug, Clone)]
 pub struct RsaKeyPair {
+    #[cfg(feature = "openssl")]
     private_key: PKey<Private>,
+    #[cfg(feature = "rustcrypto")]
+    private_key: rsa::RsaPrivateKey,
     algorithm: Option<String>,
     key_id: Option<String>,
 }
@@ -46,6 +57,7 @@ impl RsaKeyPair {
         RsaPssKeyPair::from_private_key(self.private_key, hash, mgf1_hash, salt_len)
     }
 
+    #[cfg(feature = "openssl")]
     pub(crate) fn from_private_key(private_key: PKey<Private>) -> Self {
         Self {
             private_key,
@@ -53,8 +65,20 @@ impl RsaKeyPair {
             key_id: None,
         }
     }
-
+    #[cfg(feature = "rustcrypto")]
+    pub(crate) fn from_private_key(private_key: rsa::RsaPrivateKey) -> Self {
+        Self {
+            private_key,
+            algorithm: None,
+            key_id: None,
+        }
+    }
+    #[cfg(feature = "openssl")]
     pub(crate) fn into_private_key(self) -> PKey<Private> {
+        self.private_key
+    }
+    #[cfg(feature = "rustcrypto")]
+    pub(crate) fn into_private_key(self) -> rsa::RsaPrivateKey {
         self.private_key
     }
 
@@ -64,8 +88,12 @@ impl RsaKeyPair {
     /// * `bits` - RSA key length
     pub fn generate(bits: u32) -> Result<RsaKeyPair, JoseError> {
         (|| -> anyhow::Result<RsaKeyPair> {
+            #[cfg(feature = "openssl")]
             let rsa = Rsa::generate(bits)?;
+            #[cfg(feature = "openssl")]
             let private_key = PKey::from_rsa(rsa)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = rsa::RsaPrivateKey::new(&mut OsRng, bits as usize)?;
 
             Ok(RsaKeyPair {
                 private_key,
@@ -91,7 +119,10 @@ impl RsaKeyPair {
                 }
             };
 
+            #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(pkcs8_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = rsa::RsaPrivateKey::from_pkcs8_der(pkcs8_der)?;
 
             Ok(Self {
                 private_key,
@@ -129,7 +160,10 @@ impl RsaKeyPair {
                 alg => bail!("Inappropriate algorithm: {}", alg),
             };
 
-            let private_key = PKey::private_key_from_der(&pkcs8_der)?;
+            #[cfg(feature = "openssl")]
+            let private_key = PKey::private_key_from_der(pkcs8_der)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = rsa::RsaPrivateKey::from_pkcs8_der(pkcs8_der)?;
 
             Ok(Self {
                 private_key,
@@ -207,7 +241,10 @@ impl RsaKeyPair {
             builder.end();
 
             let pkcs8 = Self::to_pkcs8(&builder.build(), false);
+            #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(&pkcs8)?;
+            #[cfg(feature = "rustcrypto")]
+            let private_key = rsa::RsaPrivateKey::from_pkcs8_der(&pkcs8)?;
             let algorithm = jwk.algorithm().map(|val| val.to_string());
             let key_id = jwk.key_id().map(|val| val.to_string());
 
@@ -220,27 +257,65 @@ impl RsaKeyPair {
         .map_err(|err| JoseError::InvalidKeyFormat(err))
     }
 
+    #[cfg(feature = "openssl")]
     pub fn to_raw_private_key(&self) -> Vec<u8> {
         let rsa = self.private_key.rsa().unwrap();
         rsa.private_key_to_der().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    pub fn to_raw_private_key(&self) -> Vec<u8> {
+        use rsa::pkcs1::EncodeRsaPrivateKey;
+        self.private_key.to_pkcs1_der().unwrap().as_bytes().to_vec()
+    }
+    #[cfg(feature = "openssl")]
     pub fn to_traditional_pem_private_key(&self) -> Vec<u8> {
         let rsa = self.private_key.rsa().unwrap();
         rsa.private_key_to_pem().unwrap()
     }
+    #[cfg(feature = "rustcrypto")]
+    pub fn to_traditional_pem_private_key(&self) -> Vec<u8> {
+        use rsa::{pkcs1::EncodeRsaPrivateKey, pkcs8::LineEnding};
 
+        self.private_key
+            .to_pkcs1_pem(LineEnding::CRLF)
+            .unwrap()
+            .as_bytes()
+            .to_vec()
+    }
+    #[cfg(feature = "openssl")]
     pub fn to_raw_public_key(&self) -> Vec<u8> {
         let rsa = self.private_key.rsa().unwrap();
         rsa.public_key_to_der_pkcs1().unwrap()
     }
+    #[cfg(feature = "rustcrypto")]
+    pub fn to_raw_public_key(&self) -> Vec<u8> {
+        use rsa::pkcs1::EncodeRsaPublicKey;
 
+        self.private_key
+            .to_public_key()
+            .to_pkcs1_der()
+            .unwrap()
+            .to_vec()
+    }
+    #[cfg(feature = "openssl")]
     pub fn to_traditional_pem_public_key(&self) -> Vec<u8> {
         let rsa = self.private_key.rsa().unwrap();
         rsa.public_key_to_pem_pkcs1().unwrap()
     }
+    #[cfg(feature = "rustcrypto")]
+    pub fn to_traditional_pem_public_key(&self) -> Vec<u8> {
+        use rsa::{pkcs1::EncodeRsaPublicKey, pkcs8::LineEnding};
+
+        self.private_key
+            .to_public_key()
+            .to_pkcs1_pem(LineEnding::CRLF)
+            .unwrap()
+            .as_bytes()
+            .to_vec()
+    }
 
     fn to_jwk(&self, private: bool, _public: bool) -> Jwk {
+        #[cfg(feature = "openssl")]
         let rsa = self.private_key.rsa().unwrap();
 
         let mut jwk = Jwk::new("RSA");
@@ -250,36 +325,59 @@ impl RsaKeyPair {
         if let Some(val) = &self.key_id {
             jwk.set_key_id(val);
         }
+        #[cfg(feature = "openssl")]
         let n = rsa.n().to_vec();
+        #[cfg(feature = "rustcrypto")]
+        let n = self.private_key.n().to_bytes_be();
         let n = util::encode_base64_urlsafe_nopad(n);
         jwk.set_parameter("n", Some(Value::String(n))).unwrap();
 
+        #[cfg(feature = "openssl")]
         let e = rsa.e().to_vec();
+        #[cfg(feature = "rustcrypto")]
+        let e = self.private_key.e().to_bytes_be();
         let e = util::encode_base64_urlsafe_nopad(e);
         jwk.set_parameter("e", Some(Value::String(e))).unwrap();
 
         if private {
+            #[cfg(feature = "openssl")]
             let d = rsa.d().to_vec();
+            #[cfg(feature = "rustcrypto")]
+            let d = self.private_key.d().to_bytes_be();
             let d = util::encode_base64_urlsafe_nopad(d);
             jwk.set_parameter("d", Some(Value::String(d))).unwrap();
 
+            #[cfg(feature = "openssl")]
             let p = rsa.p().unwrap().to_vec();
+            #[cfg(feature = "rustcrypto")]
+            let p = self.private_key.primes()[0].to_bytes_be();
             let p = util::encode_base64_urlsafe_nopad(p);
             jwk.set_parameter("p", Some(Value::String(p))).unwrap();
 
+            #[cfg(feature = "openssl")]
             let q = rsa.q().unwrap().to_vec();
+            #[cfg(feature = "rustcrypto")]
+            let q = self.private_key.primes()[1].to_bytes_be();
             let q = util::encode_base64_urlsafe_nopad(q);
             jwk.set_parameter("q", Some(Value::String(q))).unwrap();
 
+            #[cfg(feature = "openssl")]
             let dp = rsa.dmp1().unwrap().to_vec();
+            #[cfg(feature = "rustcrypto")]
+            let dp = self.private_key.dp().unwrap().to_bytes_be();
             let dp = util::encode_base64_urlsafe_nopad(dp);
             jwk.set_parameter("dp", Some(Value::String(dp))).unwrap();
-
+            #[cfg(feature = "openssl")]
             let dq = rsa.dmq1().unwrap().to_vec();
+            #[cfg(feature = "rustcrypto")]
+            let dq = self.private_key.dq().unwrap().to_bytes_be();
             let dq = util::encode_base64_urlsafe_nopad(dq);
             jwk.set_parameter("dq", Some(Value::String(dq))).unwrap();
 
+            #[cfg(feature = "openssl")]
             let qi = rsa.iqmp().unwrap().to_vec();
+            #[cfg(feature = "rustcrypto")]
+            let qi = self.private_key.qinv().unwrap().to_signed_bytes_be();
             let qi = util::encode_base64_urlsafe_nopad(qi);
             jwk.set_parameter("qi", Some(Value::String(qi))).unwrap();
         }
@@ -385,16 +483,42 @@ impl KeyPair for RsaKeyPair {
         Self::to_pkcs8(&self.to_raw_private_key(), false)
     }
 
+    #[cfg(feature = "openssl")]
     fn to_der_public_key(&self) -> Vec<u8> {
         self.private_key.public_key_to_der().unwrap()
     }
-
+    #[cfg(feature = "rustcrypto")]
+    fn to_der_public_key(&self) -> Vec<u8> {
+        use rsa::pkcs1::EncodeRsaPublicKey;
+        self.private_key
+            .to_public_key()
+            .to_pkcs1_der()
+            .unwrap()
+            .into_vec()
+    }
+    #[cfg(feature = "openssl")]
     fn to_pem_private_key(&self) -> Vec<u8> {
         self.private_key.private_key_to_pem_pkcs8().unwrap()
     }
+    #[cfg(feature = "rustcrypto")]
+    fn to_pem_private_key(&self) -> Vec<u8> {
+        use rsa::pkcs8::EncodePrivateKey;
+        self.private_key.to_pkcs8_der().unwrap().to_bytes().to_vec()
+    }
 
+    #[cfg(feature = "openssl")]
     fn to_pem_public_key(&self) -> Vec<u8> {
         self.private_key.public_key_to_pem().unwrap()
+    }
+    #[cfg(feature = "rustcrypto")]
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        use rsa::{pkcs1::EncodeRsaPublicKey, pkcs8::LineEnding};
+
+        self.private_key
+            .to_public_key()
+            .to_pkcs1_pem(LineEnding::CRLF)
+            .unwrap()
+            .into_bytes()
     }
 
     fn to_jwk_private_key(&self) -> Jwk {
