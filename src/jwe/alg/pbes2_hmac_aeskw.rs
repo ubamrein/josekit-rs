@@ -3,15 +3,56 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::ops::Deref;
 
-use anyhow::bail;
-use openssl::aes::{self, AesKey};
-use openssl::hash::MessageDigest;
-use openssl::pkcs5;
-
+#[cfg(feature = "rustcrypto")]
+use crate::jwe::alg::aeskw::{aes, AesKey};
 use crate::jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader};
 use crate::jwk::Jwk;
 use crate::util::{self, HashAlgorithm};
 use crate::{JoseError, JoseHeader, Number, Value};
+use anyhow::bail;
+#[cfg(feature = "openssl")]
+use openssl::aes::{self, AesKey};
+#[cfg(feature = "openssl")]
+use openssl::hash::MessageDigest;
+#[cfg(feature = "openssl")]
+use openssl::pkcs5;
+#[cfg(feature = "rustcrypto")]
+use sha1::Sha1;
+#[cfg(feature = "rustcrypto")]
+use sha2::Digest;
+#[cfg(feature = "rustcrypto")]
+use sha2::{Sha256, Sha384, Sha512};
+
+#[cfg(feature = "rustcrypto")]
+pub enum MessageDigest {
+    Sha1(Sha1),
+    Sha256(Sha256),
+    Sha384(Sha384),
+    Sha512(Sha512),
+}
+#[cfg(feature = "rustcrypto")]
+impl MessageDigest {
+    pub fn sha1() -> Self {
+        Self::Sha1(Sha1::new())
+    }
+    pub fn sha256() -> Self {
+        Self::Sha256(Sha256::new())
+    }
+    pub fn sha384() -> Self {
+        Self::Sha384(Sha384::new())
+    }
+    pub fn sha512() -> Self {
+        Self::Sha512(Sha512::new())
+    }
+    pub fn pbkdf2(&self, password: &[u8], salt: &[u8], rounds: u32, res: &mut [u8]) {
+        match self {
+            MessageDigest::Sha1(_) => pbkdf2::pbkdf2_hmac::<Sha1>(password, salt, rounds, res),
+            MessageDigest::Sha256(_) => pbkdf2::pbkdf2_hmac::<Sha256>(password, salt, rounds, res),
+            MessageDigest::Sha384(_) => pbkdf2::pbkdf2_hmac::<Sha384>(password, salt, rounds, res),
+            MessageDigest::Sha512(_) => pbkdf2::pbkdf2_hmac::<Sha512>(password, salt, rounds, res),
+        };
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum Pbes2HmacAeskwJweAlgorithm {
@@ -296,8 +337,11 @@ impl JweEncrypter for Pbes2HmacAeskwJweEncrypter {
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
             let mut derived_key = vec![0; self.algorithm.derived_key_len()];
+            #[cfg(feature = "openssl")]
             pkcs5::pbkdf2_hmac(&self.private_key, &salt, p2c, md, &mut derived_key)?;
-
+            #[cfg(feature = "rustcrypto")]
+            md.pbkdf2(&self.private_key, &salt, p2c as u32, &mut derived_key);
+            #[cfg(feature = "rustcrypto")]
             let aes = match AesKey::new_encrypt(&derived_key) {
                 Ok(val) => val,
                 Err(_) => bail!("Failed to set a encryption key."),
@@ -305,7 +349,9 @@ impl JweEncrypter for Pbes2HmacAeskwJweEncrypter {
 
             let mut encrypted_key = vec![0; key.len() + 8];
             match aes::wrap_key(&aes, None, &mut encrypted_key, &key) {
-                Ok(val) => {
+                Ok(val) =>
+                {
+                    #[cfg(feature = "openssl")]
                     if val < encrypted_key.len() {
                         encrypted_key.truncate(val);
                     }
@@ -411,7 +457,10 @@ impl JweDecrypter for Pbes2HmacAeskwJweDecrypter {
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
             let mut derived_key = vec![0; self.algorithm.derived_key_len()];
+            #[cfg(feature = "openssl")]
             pkcs5::pbkdf2_hmac(&self.private_key, &salt, p2c, md, &mut derived_key)?;
+            #[cfg(feature = "rustcrypto")]
+            md.pbkdf2(&self.private_key, &salt, p2c as u32, &mut derived_key);
 
             let aes = match AesKey::new_decrypt(&derived_key) {
                 Ok(val) => val,
@@ -420,7 +469,9 @@ impl JweDecrypter for Pbes2HmacAeskwJweDecrypter {
 
             let mut key = vec![0; encrypted_key.len() - 8];
             match aes::unwrap_key(&aes, None, &mut key, &encrypted_key) {
-                Ok(val) => {
+                Ok(val) =>
+                {
+                    #[cfg(feature = "openssl")]
                     if val < key.len() {
                         key.truncate(val);
                     }
