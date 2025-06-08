@@ -33,6 +33,7 @@ rustcrypto = [
     "pbkdf2",
     "rsa",
     "hmac",
+    "rand",
 ]
 
 [dependencies]
@@ -89,6 +90,7 @@ ed25519-dalek = { version = "2.1.1", features = [
     "rand_core",
     "digest",
 ], optional = true }
+rand = { version = "0.9.1", optional = true }
 
 [dev-dependencies]
 doc-comment = "0.3.3"
