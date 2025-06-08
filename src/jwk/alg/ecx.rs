@@ -4,6 +4,8 @@ use std::ops::Deref;
 use anyhow::bail;
 use openssl::pkey::{PKey, Private};
 
+#[cfg(feature = "rustcrypto")]
+use crate::jwe::alg::ecdh_es::PrivateKey;
 use crate::jwk::{Jwk, KeyPair};
 use crate::util;
 use crate::util::der::{DerBuilder, DerReader, DerType};
@@ -40,7 +42,10 @@ impl Display for EcxCurve {
 
 #[derive(Debug, Clone)]
 pub struct EcxKeyPair {
+    #[cfg(feature = "openssl")]
     private_key: PKey<Private>,
+    #[cfg(feature = "rustcrypto")]
+    private_key: PrivateKey,
     curve: EcxCurve,
     algorithm: Option<String>,
     key_id: Option<String>,
