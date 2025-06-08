@@ -88,10 +88,22 @@ impl PublicKey {
     }
     pub fn ec_key_der(&self) -> Result<Vec<u8>, anyhow::Error> {
         match self {
-            PublicKey::P256(key) => Ok(key.to_sec1_bytes().to_vec()),
-            PublicKey::P384(key) => Ok(key.to_sec1_bytes().to_vec()),
-            PublicKey::P521(key) => Ok(key.to_sec1_bytes().to_vec()),
-            PublicKey::K256(key) => Ok(key.to_sec1_bytes().to_vec()),
+            PublicKey::P256(key) => {
+                use p256::pkcs8::EncodePublicKey;
+                Ok(key.to_public_key_der().unwrap().to_vec())
+            }
+            PublicKey::P384(key) => {
+                use p384::pkcs8::EncodePublicKey;
+                Ok(key.to_public_key_der().unwrap().to_vec())
+            }
+            PublicKey::P521(key) => {
+                use p521::pkcs8::EncodePublicKey;
+                Ok(key.to_public_key_der().unwrap().to_vec())
+            }
+            PublicKey::K256(key) => {
+                use k256::pkcs8::EncodePublicKey;
+                Ok(key.to_public_key_der().unwrap().to_vec())
+            }
             PublicKey::X25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes(), true)),
             PublicKey::X448(key) => Ok(ed448_public_to_ec_der(key.as_bytes(), true)),
             PublicKey::Ed25519(key) => Ok(ed25519_public_to_ec_der(key.as_bytes(), false)),
@@ -99,7 +111,54 @@ impl PublicKey {
         }
     }
     pub fn ec_key_pem(&self) -> Result<String, anyhow::Error> {
-        todo!("PEM not implemented")
+        match self {
+            PublicKey::P256(key) => {
+                use p256::pkcs8::EncodePublicKey;
+                use rsa::pkcs8::LineEnding;
+                Ok(key.to_public_key_pem(LineEnding::CRLF).unwrap())
+            }
+            PublicKey::P384(key) => {
+                use p384::pkcs8::EncodePublicKey;
+                use rsa::pkcs8::LineEnding;
+                Ok(key.to_public_key_pem(LineEnding::CRLF).unwrap())
+            }
+            PublicKey::P521(key) => {
+                use p521::pkcs8::EncodePublicKey;
+                use rsa::pkcs8::LineEnding;
+                Ok(key.to_public_key_pem(LineEnding::CRLF).unwrap())
+            }
+            PublicKey::K256(key) => {
+                use k256::pkcs8::EncodePublicKey;
+                use rsa::pkcs8::LineEnding;
+                Ok(key.to_public_key_pem(LineEnding::CRLF).unwrap())
+            }
+            PublicKey::X25519(key) => {
+                use rsa::pkcs1::pem::PemLabel;
+
+                let bytes = ed25519_public_to_ec_der(key.as_bytes(), true);
+                let p = pem::Pem::new(SubjectPublicKeyInfoRef::PEM_LABEL, bytes);
+                Ok(pem::encode(&p))
+            }
+            PublicKey::X448(key) => {
+                use rsa::pkcs1::pem::PemLabel;
+                let bytes = ed448_public_to_ec_der(key.as_bytes(), true);
+                let p = pem::Pem::new(SubjectPublicKeyInfoRef::PEM_LABEL, bytes);
+                Ok(pem::encode(&p))
+            }
+            PublicKey::Ed25519(key) => {
+                // Ok(ed25519_public_to_ec_der(key.as_bytes(), false))
+                use rsa::pkcs1::pem::PemLabel;
+                let bytes = ed25519_public_to_ec_der(key.as_bytes(), false);
+                let p = pem::Pem::new(SubjectPublicKeyInfoRef::PEM_LABEL, bytes);
+                Ok(pem::encode(&p))
+            }
+            PublicKey::Ed448(key) => {
+                use rsa::pkcs1::pem::PemLabel;
+                let bytes = ed448_public_to_ec_der(key.as_bytes(), false);
+                let p = pem::Pem::new(SubjectPublicKeyInfoRef::PEM_LABEL, bytes);
+                Ok(pem::encode(&p))
+            }
+        }
     }
     pub fn ec_key_jwk(&self) -> Result<String, anyhow::Error> {
         match self {
