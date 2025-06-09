@@ -181,6 +181,7 @@ mod tests {
     use anyhow::Result;
     use serde_json::json;
 
+    use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
     #[allow(deprecated)]
     use crate::jwe::{
         Dir, A128GCMKW, A128KW, A192GCMKW, A192KW, A256GCMKW, A256KW, ECDH_ES, ECDH_ES_A128KW,
@@ -193,6 +194,7 @@ mod tests {
         RS256, RS384, RS512,
     };
     use crate::jwt::{self, JwtPayload};
+    use crate::util::decode_base64_urlsafe_no_pad;
     use crate::Value;
     use crate::{util, JoseHeader};
 
@@ -507,12 +509,17 @@ mod tests {
     #[test]
     fn test_es256k_sign_and_verify() -> Result<()> {
         let alg = ES256K;
-        let content = b"testasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddas";
+        let jwt_string = String::from_utf8(load_file(&format!("jwt/{}.jwt", alg.name()))?)?;
+        let content_parts = jwt_string.split(".").collect::<Vec<&str>>();
+        let content = content_parts[0].to_string() + "." + content_parts[1];
         let jwk_private = Jwk::from_bytes(&load_file("jwk/EC_secp256k1_private.jwk")?)?;
+        let jwk_public = Jwk::from_bytes(&load_file("jwk/EC_secp256k1_public.jwk")?)?;
         let signer = alg.signer_from_jwk(&jwk_private)?;
         let stuff = signer.sign(content.as_ref())?;
-        let verifier = alg.verifier_from_jwk(&jwk_private)?;
-        verifier.verify(content.as_slice(), &stuff)?;
+        let verifier = alg.verifier_from_jwk(&jwk_public)?;
+        let sig = decode_base64_urlsafe_no_pad(&content_parts[2])?;
+        // let content = MessageDigest::sha256().hash(content.as_bytes());
+        verifier.verify(content.as_bytes(), &sig)?;
         Ok(())
     }
 

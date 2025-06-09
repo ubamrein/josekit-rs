@@ -290,10 +290,16 @@ impl PublicKey {
                 Ok(())
             }
             PublicKey::K256(public_key) => {
-                use k256::ecdsa::signature::Verifier;
+                use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
                 let signature = k256::ecdsa::Signature::from_der(signature)?;
-                let verifying_key: k256::ecdsa::VerifyingKey = public_key.into();
-                verifying_key.verify(msg, &signature)?;
+                let md = MessageDigest::sha256();
+                let hash = md.hash(&msg);
+                //TODO: find out why the default hash does not work with sha256
+                k256::ecdsa::hazmat::verify_prehashed(
+                    &public_key.to_projective(),
+                    k256::FieldBytes::from_slice(&hash),
+                    &signature,
+                )?;
                 Ok(())
             }
             PublicKey::X25519(_) => unimplemented!("x25519 is a DH protocol"),
