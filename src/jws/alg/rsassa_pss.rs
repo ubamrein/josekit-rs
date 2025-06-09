@@ -12,9 +12,11 @@ use openssl::rsa::Rsa;
 use openssl::sign::{Signer, Verifier};
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs1::DecodeRsaPublicKey;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePublicKey;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::{self, SubjectPublicKeyInfo, SubjectPublicKeyInfoRef};
 #[cfg(feature = "rustcrypto")]
 use sha2::Sha256;
@@ -254,7 +256,7 @@ impl RsassaPssJwsAlgorithm {
                     spki_der_vec.as_slice()
                 }
             };
-            println!("---->");
+            #[cfg(feature = "rustcrypto")]
             let p = SubjectPublicKeyInfoRef::from_der(&input)?;
             #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki_der)?;
@@ -316,6 +318,7 @@ impl RsassaPssJwsAlgorithm {
                         } else if salt_len != self.salt_len() {
                             bail!("The salt size is mismatched: {}", salt_len);
                         }
+                        #[cfg(feature = "rustcrypto")]
                         let p = SubjectPublicKeyInfoRef::from_der(&data)?;
                         #[cfg(feature = "openssl")]
                         let public_key = PKey::public_key_from_der(&data)?;
@@ -353,6 +356,7 @@ impl RsassaPssJwsAlgorithm {
                         self.hash_algorithm(),
                         self.salt_len(),
                     );
+                    #[cfg(feature = "rustcrypto")]
                     let p = SubjectPublicKeyInfoRef::from_der(&pkcs8)?;
                     #[cfg(feature = "openssl")]
                     let public_key = PKey::public_key_from_der(&pkcs8)?;
@@ -433,15 +437,15 @@ impl RsassaPssJwsAlgorithm {
                 builder.append_integer_from_be_slice(&e, true); // e
             }
             builder.end();
+            #[cfg(feature = "openssl")]
+            let pkcs8 = RsaPssKeyPair::to_pkcs8(
+                &builder.build(),
+                true,
+                self.hash_algorithm(),
+                self.hash_algorithm(),
+                self.salt_len(),
+            );
 
-            // let pkcs8 = RsaPssKeyPair::to_pkcs8(
-            //     &builder.build(),
-            //     true,
-            //     self.hash_algorithm(),
-            //     self.hash_algorithm(),
-            //     self.salt_len(),
-            // );
-            println!("===>");
             #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(&pkcs8)?;
             #[cfg(feature = "rustcrypto")]
@@ -453,7 +457,6 @@ impl RsassaPssJwsAlgorithm {
                     bail!("key length must be 2048 or more.");
                 }
             }
-            let public_key: rsa::RsaPublicKey = public_key.into();
             #[cfg(feature = "rustcrypto")]
             {
                 use rsa::traits::PublicKeyParts;

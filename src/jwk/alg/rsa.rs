@@ -7,10 +7,13 @@ use openssl::pkey::{PKey, Private};
 use openssl::rsa::Rsa;
 #[cfg(feature = "rustcrypto")]
 use rand::rngs::OsRng;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs1::DecodeRsaPrivateKey;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePrivateKey;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::PrivateKeyInfoRef;
 #[cfg(feature = "rustcrypto")]
 use rsa::traits::{PrivateKeyParts, PublicKeyParts};
@@ -245,9 +248,8 @@ impl RsaKeyPair {
             builder.end();
 
             let pkcs8 = Self::to_pkcs8(&builder.build(), false);
+            #[cfg(feature = "rustcrypto")]
             let private_key_info = PrivateKeyInfoRef::from_der(&pkcs8)?;
-            println!("{:?}", private_key_info);
-            println!("{:?}", private_key_info.private_key);
             #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(&pkcs8)?;
             #[cfg(feature = "rustcrypto")]

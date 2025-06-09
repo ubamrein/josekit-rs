@@ -5,10 +5,13 @@ use anyhow::bail;
 use openssl::pkey::{PKey, Private};
 #[cfg(feature = "openssl")]
 use openssl::rsa::Rsa;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePrivateKey;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::{DecodePublicKey, PrivateKeyInfo, PrivateKeyInfoRef};
 #[cfg(feature = "rustcrypto")]
 use rsa::traits::{PrivateKeyParts, PublicKeyParts};
@@ -183,8 +186,8 @@ impl RsaPssKeyPair {
                     (pkcs8_der_vec.as_slice(), hash, mgf1_hash, salt_len)
                 }
             };
+            #[cfg(feature = "rustcrypto")]
             let d = PrivateKeyInfoRef::from_der(&pkcs8_der)?;
-            println!("{:?}", d);
             #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(pkcs8_der)?;
             #[cfg(feature = "rustcrypto")]
@@ -279,6 +282,7 @@ impl RsaPssKeyPair {
                 }
                 alg => bail!("Inappropriate algorithm: {}", alg),
             };
+            #[cfg(feature = "rustcrypto")]
             let d = PrivateKeyInfoRef::from_der(pkcs8_der)?;
             #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(pkcs8_der)?;
