@@ -505,6 +505,18 @@ mod tests {
     }
 
     #[test]
+    fn test_es256k_sign_and_verify() -> Result<()> {
+        let alg = ES256K;
+        let content = b"testasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddastestasdsaddas";
+        let jwk_private = Jwk::from_bytes(&load_file("jwk/EC_secp256k1_private.jwk")?)?;
+        let signer = alg.signer_from_jwk(&jwk_private)?;
+        let stuff = signer.sign(content.as_ref())?;
+        let verifier = alg.verifier_from_jwk(&jwk_private)?;
+        verifier.verify(content.as_slice(), &stuff)?;
+        Ok(())
+    }
+
+    #[test]
     fn test_external_jwt_verify_with_ecdsa() -> Result<()> {
         for alg in &[ES256, ES384, ES512, ES256K] {
             let jwk = Jwk::from_bytes(&load_file(match alg {
