@@ -184,7 +184,6 @@ impl EddsaJwsAlgorithm {
             let public_key = PKey::public_key_from_der(spki_der)?;
             #[cfg(feature = "rustcrypto")]
             let public_key = PublicKey::from_pkcs8_der_with_ed_curve(curve, spki_der)?;
-
             Ok(EddsaJwsVerifier {
                 algorithm: self.clone(),
                 public_key,

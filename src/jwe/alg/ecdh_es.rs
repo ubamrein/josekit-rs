@@ -184,12 +184,9 @@ impl PublicKey {
             EdCurve::Ed25519 => PublicKey::Ed25519(ed25519_dalek::VerifyingKey::from_bytes(
                 &ed25519_public_from_der_spki(&spki)?,
             )?),
-            EdCurve::Ed448 => {
-                let mut octets = [0u8; 57];
-                let key_bytes = ed448_public_from_der_spki(spki)?;
-                octets[..56].copy_from_slice(&key_bytes);
-                PublicKey::Ed448(cx448::VerifyingKey::from_bytes(&octets)?)
-            }
+            EdCurve::Ed448 => PublicKey::Ed448(cx448::VerifyingKey::from_bytes(
+                &ed448_verifying_from_der_spki(spki)?,
+            )?),
         })
     }
     pub fn from_pkcs8_der_with_ec_curve(
@@ -360,12 +357,22 @@ pub fn ed448_public_from_der_spki(key_bytes: &[u8]) -> Result<[u8; 56], anyhow::
     if spki.subject_public_key.raw_bytes().len() != 56
         && spki.subject_public_key.raw_bytes().len() != 57
     {
-        println!("{:?}", spki.subject_public_key.as_bytes());
-        println!("{:?}", spki.subject_public_key.raw_bytes().len());
         return Err(anyhow::anyhow!("=> Invalid Ed448 public key"));
     }
+    println!("{}", spki.subject_public_key.raw_bytes().len());
     let mut x_bytes = [0; 56];
     x_bytes.copy_from_slice(&spki.subject_public_key.raw_bytes()[..56]);
+    Ok(x_bytes)
+}
+#[cfg(feature = "rustcrypto")]
+pub fn ed448_verifying_from_der_spki(key_bytes: &[u8]) -> Result<[u8; 57], anyhow::Error> {
+    let spki = SubjectPublicKeyInfoRef::from_der(&key_bytes)?;
+    if spki.subject_public_key.raw_bytes().len() != 57 {
+        return Err(anyhow::anyhow!("=> Invalid Ed448 public key"));
+    }
+    println!("{}", spki.subject_public_key.raw_bytes().len());
+    let mut x_bytes = [0; 57];
+    x_bytes.copy_from_slice(&spki.subject_public_key.raw_bytes());
     Ok(x_bytes)
 }
 #[cfg(feature = "rustcrypto")]
@@ -713,6 +720,8 @@ impl PrivateKey {
             PrivateKey::Ed448(signing_key) => {
                 use cx448::crypto_signature::Signer;
                 let signature: cx448::Signature = signing_key.sign(msg);
+                let vk = signing_key.verifying_key();
+                println!("vk1: {:?}", vk.as_bytes());
                 signature.to_bytes().to_vec()
             }
         })
