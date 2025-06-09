@@ -178,9 +178,7 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{Duration, SystemTime};
 
-    use anyhow::Result;
-    use serde_json::json;
-
+    #[cfg(feature = "rustcrypto")]
     use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
     #[allow(deprecated)]
     use crate::jwe::{
@@ -197,6 +195,8 @@ mod tests {
     use crate::util::decode_base64_urlsafe_no_pad;
     use crate::Value;
     use crate::{util, JoseHeader};
+    use anyhow::Result;
+    use serde_json::json;
 
     #[test]
     fn test_decode_header() -> Result<()> {
