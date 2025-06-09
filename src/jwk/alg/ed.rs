@@ -1,8 +1,6 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
-#[cfg(feature = "rustcrypto")]
-use aes_gcm::aead::OsRng;
 use anyhow::bail;
 #[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private};
@@ -90,6 +88,8 @@ impl EdKeyPair {
     /// * `curve` - EdDSA curve algorithm
     pub fn generate(curve: EdCurve) -> Result<Self, JoseError> {
         (|| -> anyhow::Result<Self> {
+            #[cfg(feature = "rustcrypto")]
+            use aes_gcm::aead::OsRng;
             #[cfg(feature = "openssl")]
             let private_key = match curve {
                 EdCurve::Ed25519 => PKey::generate_ed25519()?,

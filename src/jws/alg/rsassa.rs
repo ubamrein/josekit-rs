@@ -435,7 +435,7 @@ impl JwsSigner for RsassaJwsSigner {
     #[cfg(feature = "rustcrypto")]
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError> {
         (|| -> anyhow::Result<Vec<u8>> {
-            use aes_gcm::aead::OsRng;
+            use rand::rngs::OsRng;
             use rsa::{traits::SignatureScheme, Pkcs1v15Sign};
             use sha1::Sha1;
             use sha2::{Sha256, Sha384, Sha512};
@@ -622,9 +622,10 @@ mod tests {
             RsassaJwsAlgorithm::Rs512,
         ] {
             let key_pair = alg.generate_key_pair(2048)?;
-
+            println!("before");
             let signer = alg.signer_from_pem(&key_pair.to_pem_private_key())?;
             let signature = signer.sign(input)?;
+            println!("after");
 
             let verifier = alg.verifier_from_pem(&key_pair.to_pem_public_key())?;
             verifier.verify(input, &signature)?;

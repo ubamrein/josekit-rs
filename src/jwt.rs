@@ -484,6 +484,7 @@ mod tests {
         let jwk = Jwk::from_bytes(&load_file("jwk/RSA_public.jwk")?)?;
 
         for alg in &[PS256, PS384, PS512] {
+            println!("{:?}", alg);
             let verifier = alg.verifier_from_jwk(&jwk)?;
             let jwt_string = String::from_utf8(load_file(&format!("jwt/{}.jwt", alg.name()))?)?;
             let (payload, header) = jwt::decode_with_verifier(&jwt_string, &verifier)?;
@@ -514,6 +515,7 @@ mod tests {
             })?)?;
             let verifier = alg.verifier_from_jwk(&jwk)?;
             let jwt_string = String::from_utf8(load_file(&format!("jwt/{}.jwt", alg.name()))?)?;
+            println!("{alg:?}");
             let (payload, header) = jwt::decode_with_verifier(&jwt_string, &verifier)?;
 
             assert_eq!(header.algorithm(), Some(verifier.algorithm().name()));

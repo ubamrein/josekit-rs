@@ -11,6 +11,7 @@ use openssl::sign::{Signer, Verifier};
 
 #[cfg(feature = "rustcrypto")]
 use crate::jwe::alg::ecdh_es::{PrivateKey, PublicKey};
+#[cfg(feature = "rustcrypto")]
 use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
 use crate::jwk::{
     alg::ec::{EcCurve, EcKeyPair},

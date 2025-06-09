@@ -414,7 +414,7 @@ impl JweEncrypter for RsaesJweEncrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::Rsa1_5 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::{traits::PaddingScheme, Pkcs1v15Encrypt};
                     let encrypted_key =
                         Pkcs1v15Encrypt.encrypt(&mut OsRng, &self.public_key, &key)?;
@@ -429,7 +429,7 @@ impl JweEncrypter for RsaesJweEncrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha1::Sha1>();
@@ -444,7 +444,7 @@ impl JweEncrypter for RsaesJweEncrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep256 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha2::Sha256>();
@@ -459,7 +459,7 @@ impl JweEncrypter for RsaesJweEncrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep384 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha2::Sha384>();
@@ -474,7 +474,7 @@ impl JweEncrypter for RsaesJweEncrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep512 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha2::Sha512>();
@@ -557,7 +557,7 @@ impl JweDecrypter for RsaesJweDecrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::Rsa1_5 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::{traits::PaddingScheme, Pkcs1v15Encrypt};
                     let key = Pkcs1v15Encrypt.decrypt(
                         Some(&mut OsRng),
@@ -575,7 +575,7 @@ impl JweDecrypter for RsaesJweDecrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha1::Sha1>();
@@ -590,7 +590,7 @@ impl JweDecrypter for RsaesJweDecrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep256 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha2::Sha256>();
@@ -605,7 +605,7 @@ impl JweDecrypter for RsaesJweDecrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep384 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha2::Sha384>();
@@ -620,7 +620,7 @@ impl JweDecrypter for RsaesJweDecrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep512 => {
-                    use aes_gcm::aead::OsRng;
+                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
                     let oaep = rsa::Oaep::new::<sha2::Sha512>();

@@ -418,6 +418,7 @@ mod tests {
         let input = b"abcde12345";
 
         for curve in vec![EdCurve::Ed25519, EdCurve::Ed448] {
+            println!("--> {curve:?}");
             let alg = EddsaJwsAlgorithm::Eddsa;
             let key_pair = alg.generate_key_pair(curve)?;
 

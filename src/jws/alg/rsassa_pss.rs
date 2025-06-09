@@ -11,7 +11,13 @@ use openssl::rsa::Rsa;
 #[cfg(feature = "openssl")]
 use openssl::sign::{Signer, Verifier};
 #[cfg(feature = "rustcrypto")]
+use rsa::pkcs1::DecodeRsaPublicKey;
+use rsa::pkcs8::der::Decode;
+#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePublicKey;
+use rsa::pkcs8::{self, SubjectPublicKeyInfo, SubjectPublicKeyInfoRef};
+#[cfg(feature = "rustcrypto")]
+use sha2::Sha256;
 
 use crate::jwk::{alg::rsa::RsaKeyPair, alg::rsapss::RsaPssKeyPair, Jwk};
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
@@ -248,11 +254,15 @@ impl RsassaPssJwsAlgorithm {
                     spki_der_vec.as_slice()
                 }
             };
-
+            println!("---->");
+            let p = SubjectPublicKeyInfoRef::from_der(&input)?;
             #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(spki_der)?;
             #[cfg(feature = "rustcrypto")]
-            let public_key = rsa::RsaPublicKey::from_public_key_der(spki_der)?;
+            let public_key = rsa::RsaPublicKey::from_pkcs1_der(p.subject_public_key.raw_bytes())
+                .or_else(|_| {
+                    rsa::RsaPublicKey::from_public_key_der(p.subject_public_key.raw_bytes())
+                })?;
             #[cfg(feature = "openssl")]
             {
                 let rsa = public_key.rsa()?;
@@ -306,11 +316,17 @@ impl RsassaPssJwsAlgorithm {
                         } else if salt_len != self.salt_len() {
                             bail!("The salt size is mismatched: {}", salt_len);
                         }
-
+                        let p = SubjectPublicKeyInfoRef::from_der(&data)?;
                         #[cfg(feature = "openssl")]
                         let public_key = PKey::public_key_from_der(&data)?;
                         #[cfg(feature = "rustcrypto")]
-                        let public_key = rsa::RsaPublicKey::from_public_key_der(&data)?;
+                        let public_key =
+                            rsa::RsaPublicKey::from_pkcs1_der(&p.subject_public_key.raw_bytes())
+                                .or_else(|_| {
+                                    rsa::RsaPublicKey::from_public_key_der(
+                                        &p.subject_public_key.raw_bytes(),
+                                    )
+                                })?;
                         #[cfg(feature = "openssl")]
                         {
                             let rsa = public_key.rsa()?;
@@ -337,10 +353,17 @@ impl RsassaPssJwsAlgorithm {
                         self.hash_algorithm(),
                         self.salt_len(),
                     );
+                    let p = SubjectPublicKeyInfoRef::from_der(&pkcs8)?;
                     #[cfg(feature = "openssl")]
                     let public_key = PKey::public_key_from_der(&pkcs8)?;
                     #[cfg(feature = "rustcrypto")]
-                    let public_key = rsa::RsaPublicKey::from_public_key_der(&pkcs8)?;
+                    let public_key =
+                        rsa::RsaPublicKey::from_pkcs1_der(&p.subject_public_key.raw_bytes())
+                            .or_else(|_| {
+                                rsa::RsaPublicKey::from_public_key_der(
+                                    &p.subject_public_key.raw_bytes(),
+                                )
+                            })?;
                     #[cfg(feature = "openssl")]
                     {
                         let rsa = public_key.rsa()?;
@@ -411,17 +434,18 @@ impl RsassaPssJwsAlgorithm {
             }
             builder.end();
 
-            let pkcs8 = RsaPssKeyPair::to_pkcs8(
-                &builder.build(),
-                true,
-                self.hash_algorithm(),
-                self.hash_algorithm(),
-                self.salt_len(),
-            );
+            // let pkcs8 = RsaPssKeyPair::to_pkcs8(
+            //     &builder.build(),
+            //     true,
+            //     self.hash_algorithm(),
+            //     self.hash_algorithm(),
+            //     self.salt_len(),
+            // );
+            println!("===>");
             #[cfg(feature = "openssl")]
             let public_key = PKey::public_key_from_der(&pkcs8)?;
             #[cfg(feature = "rustcrypto")]
-            let public_key = rsa::RsaPublicKey::from_public_key_der(&pkcs8)?;
+            let public_key = rsa::RsaPublicKey::from_pkcs1_der(&builder.build())?;
             #[cfg(feature = "openssl")]
             {
                 let rsa = public_key.rsa()?;
@@ -429,6 +453,7 @@ impl RsassaPssJwsAlgorithm {
                     bail!("key length must be 2048 or more.");
                 }
             }
+            let public_key: rsa::RsaPublicKey = public_key.into();
             #[cfg(feature = "rustcrypto")]
             {
                 use rsa::traits::PublicKeyParts;
@@ -547,8 +572,8 @@ impl JwsSigner for RsassaPssJwsSigner {
     #[cfg(feature = "rustcrypto")]
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError> {
         (|| -> anyhow::Result<Vec<u8>> {
-            use aes_gcm::aead::OsRng;
-            use rsa::{traits::SignatureScheme, Oaep, Pss};
+            use rand::rngs::OsRng;
+            use rsa::{traits::SignatureScheme, Pss};
             use sha1::Sha1;
             use sha2::{Sha256, Sha384, Sha512};
 
@@ -637,8 +662,7 @@ impl JwsVerifier for RsassaPssJwsVerifier {
     #[cfg(feature = "rustcrypto")]
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), JoseError> {
         (|| -> anyhow::Result<()> {
-            use aes_gcm::aead::OsRng;
-            use rsa::{traits::SignatureScheme, Oaep, Pss};
+            use rsa::{traits::SignatureScheme, Pss};
             use sha1::Sha1;
             use sha2::{Sha256, Sha384, Sha512};
 
@@ -700,7 +724,6 @@ mod tests {
 
             let signer = alg.signer_from_der(&key_pair.to_der_private_key())?;
             let signature = signer.sign(input)?;
-
             let verifier = alg.verifier_from_der(&key_pair.to_der_public_key())?;
             verifier.verify(input, &signature)?;
         }
@@ -718,10 +741,12 @@ mod tests {
             RsassaPssJwsAlgorithm::Ps384,
             RsassaPssJwsAlgorithm::Ps512,
         ] {
+            println!("verifier {alg:?}");
+            let verifier = alg.verifier_from_der(&key_pair.to_raw_public_key())?;
+            println!("signer");
             let signer = alg.signer_from_der(&key_pair.to_der_private_key())?;
             let signature = signer.sign(input)?;
 
-            let verifier = alg.verifier_from_der(&key_pair.to_der_public_key())?;
             verifier.verify(input, &signature)?;
         }
 
@@ -738,11 +763,12 @@ mod tests {
             RsassaPssJwsAlgorithm::Ps512,
         ] {
             let key_pair = alg.generate_key_pair(2048)?;
-
+            println!("before");
             let signer = alg.signer_from_der(&key_pair.to_raw_private_key())?;
+            println!("after 1");
             let signature = signer.sign(input)?;
 
-            let verifier = alg.verifier_from_der(&key_pair.to_raw_public_key())?;
+            let verifier = alg.verifier_from_der(&key_pair.to_der_public_key())?;
             verifier.verify(input, &signature)?;
         }
 
@@ -759,10 +785,10 @@ mod tests {
             RsassaPssJwsAlgorithm::Ps512,
         ] {
             let key_pair = alg.generate_key_pair(2048)?;
-
+            println!("test1");
             let signer = alg.signer_from_pem(&key_pair.to_pem_private_key())?;
             let signature = signer.sign(input)?;
-
+            println!("test2");
             let verifier = alg.verifier_from_pem(&key_pair.to_pem_public_key())?;
             verifier.verify(input, &signature)?;
         }
@@ -883,10 +909,11 @@ mod tests {
                 RsassaPssJwsAlgorithm::Ps384 => "der/RSA-PSS_2048bit_SHA-384_spki_public.der",
                 RsassaPssJwsAlgorithm::Ps512 => "der/RSA-PSS_2048bit_SHA-512_spki_public.der",
             })?;
-
+            println!("signer");
             let signer = alg.signer_from_der(&private_key)?;
             let signature = signer.sign(input)?;
 
+            println!("verifier");
             let verifier = alg.verifier_from_der(&public_key)?;
             verifier.verify(input, &signature)?;
         }

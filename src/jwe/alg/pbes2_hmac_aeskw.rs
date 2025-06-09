@@ -86,7 +86,7 @@ impl MessageDigest {
         };
     }
     pub fn hmac(&self, key: &[u8]) -> Result<self::Hmac, anyhow::Error> {
-        use hmac::Mac;
+        use hmac::KeyInit;
 
         Ok(match self {
             MessageDigest::Sha1(_) => {

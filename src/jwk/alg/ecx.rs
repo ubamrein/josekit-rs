@@ -1,8 +1,6 @@
 use std::fmt::Display;
 use std::ops::Deref;
 
-#[cfg(feature = "rustcrypto")]
-use aes_gcm::aead::OsRng;
 use anyhow::bail;
 #[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private};
@@ -87,6 +85,8 @@ impl EcxKeyPair {
     /// # Arguments
     /// * `curve` - Montgomery curve curve algorithm
     pub fn generate(curve: EcxCurve) -> Result<EcxKeyPair, JoseError> {
+        #[cfg(feature = "rustcrypto")]
+        use aes_gcm::aead::OsRng;
         (|| -> anyhow::Result<EcxKeyPair> {
             #[cfg(feature = "openssl")]
             let private_key = match curve {
