@@ -6,7 +6,7 @@ use openssl::pkey::{PKey, Private};
 #[cfg(feature = "openssl")]
 use openssl::rsa::Rsa;
 #[cfg(feature = "rustcrypto")]
-use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
+use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, RsaPrivateKey};
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
@@ -377,13 +377,12 @@ impl RsaPssKeyPair {
             builder.end();
             #[cfg(feature = "openssl")]
             let pkcs8 = RsaPssKeyPair::to_pkcs8(&builder.build(), false, hash, mgf1_hash, salt_len);
-            // #[cfg(feature = "rustcrypto")]
-            // let pkcs8 = RsaKeyPair::to_pkcs8(&builder.build(), false);
-            println!("---> asd");
             #[cfg(feature = "openssl")]
             let private_key = PKey::private_key_from_der(&pkcs8)?;
             #[cfg(feature = "rustcrypto")]
-            let private_key = rsa::pss::SigningKey::<Sha256>::from_pkcs1_der(&builder.build())?;
+            let private_key: rsa::RsaPrivateKey =
+                DecodeRsaPrivateKey::from_pkcs1_der(&builder.build())?;
+
             let algorithm = jwk.algorithm().map(|val| val.to_string());
             let key_id = jwk.key_id().map(|val| val.to_string());
 
