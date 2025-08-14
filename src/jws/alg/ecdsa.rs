@@ -456,26 +456,24 @@ impl JwsVerifier for EcdsaJwsVerifier {
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), JoseError> {
         (|| -> anyhow::Result<()> {
             let signature_len = self.algorithm.signature_len();
-            if signature.len() != signature_len {
-                bail!(
-                    "A signature size must be {}: {}",
-                    signature_len,
-                    signature.len()
-                );
-            }
+            // If the signature is in the SEC1 bytes format (65 bytes long), make a der signature out of it
+            let der_signature = if signature.len() == signature_len {
+                let mut der_builder = DerBuilder::new();
+                der_builder.begin(DerType::Sequence);
+                {
+                    let sep = signature_len / 2;
 
-            let mut der_builder = DerBuilder::new();
-            der_builder.begin(DerType::Sequence);
-            {
-                let sep = signature_len / 2;
-
-                let zeros = signature[..sep].iter().take_while(|b| **b == 0).count();
-                der_builder.append_integer_from_be_slice(&signature[zeros..sep], true);
-                let zeros = signature[sep..].iter().take_while(|b| **b == 0).count();
-                der_builder.append_integer_from_be_slice(&signature[(sep + zeros)..], true);
-            }
-            der_builder.end();
-            let der_signature = der_builder.build();
+                    let zeros = signature[..sep].iter().take_while(|b| **b == 0).count();
+                    der_builder.append_integer_from_be_slice(&signature[zeros..sep], true);
+                    let zeros = signature[sep..].iter().take_while(|b| **b == 0).count();
+                    der_builder.append_integer_from_be_slice(&signature[(sep + zeros)..], true);
+                }
+                der_builder.end();
+                der_builder.build()
+            } else {
+                // we assume that the signature is in DER format. It should fail later if it's not
+                signature.to_vec()
+            };
 
             let md = match &self.algorithm.hash_algorithm() {
                 HashAlgorithm::Sha1 => MessageDigest::sha1(),
