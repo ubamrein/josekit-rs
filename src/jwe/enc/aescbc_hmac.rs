@@ -116,34 +116,34 @@ impl JweContentEncryption for AescbcHmacJweEncryption {
             #[cfg(feature = "rustcrypto")]
             let encrypted_message = match self {
                 AescbcHmacJweEncryption::A128cbcHs256 => {
-                    use aes::cipher::{block_padding::ZeroPadding, BlockEncryptMut, KeyIvInit};
+                    use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit};
                     let mut default_iv = [0; 16];
                     if let Some(iv) = iv {
                         default_iv.copy_from_slice(&iv[..16]);
                     }
                     let encryptor =
                         cbc::Encryptor::<aes::Aes128>::new(enc_key.into(), &default_iv.into());
-                    encryptor.encrypt_padded_vec_mut::<ZeroPadding>(&message)
+                    encryptor.encrypt_padded_vec_mut::<Pkcs7>(&message)
                 }
                 AescbcHmacJweEncryption::A192cbcHs384 => {
-                    use aes::cipher::{block_padding::ZeroPadding, BlockEncryptMut, KeyIvInit};
+                    use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit};
                     let mut default_iv = [0; 16];
                     if let Some(iv) = iv {
                         default_iv.copy_from_slice(&iv[..16]);
                     }
                     let encryptor =
                         cbc::Encryptor::<aes::Aes192>::new(enc_key.into(), &default_iv.into());
-                    encryptor.encrypt_padded_vec_mut::<ZeroPadding>(&message)
+                    encryptor.encrypt_padded_vec_mut::<Pkcs7>(&message)
                 }
                 AescbcHmacJweEncryption::A256cbcHs512 => {
-                    use aes::cipher::{block_padding::ZeroPadding, BlockEncryptMut, KeyIvInit};
+                    use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit};
                     let mut default_iv = [0; 16];
                     if let Some(iv) = iv {
                         default_iv.copy_from_slice(&iv[..16]);
                     }
                     let encryptor =
                         cbc::Encryptor::<aes::Aes256>::new(enc_key.into(), &default_iv.into());
-                    encryptor.encrypt_padded_vec_mut::<ZeroPadding>(&message)
+                    encryptor.encrypt_padded_vec_mut::<Pkcs7>(&message)
                 }
             };
             Ok((encrypted_message, mac_key))
@@ -187,7 +187,7 @@ impl JweContentEncryption for AescbcHmacJweEncryption {
             #[cfg(feature = "rustcrypto")]
             let message = match self {
                 AescbcHmacJweEncryption::A128cbcHs256 => {
-                    use aes::cipher::{block_padding::ZeroPadding, BlockDecryptMut, KeyIvInit};
+                    use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
                     let mut default_iv = [0; 16];
                     if let Some(iv) = iv {
                         default_iv.copy_from_slice(&iv[..16]);
@@ -195,11 +195,11 @@ impl JweContentEncryption for AescbcHmacJweEncryption {
                     let decryptor =
                         cbc::Decryptor::<aes::Aes128>::new(enc_key.into(), &default_iv.into());
                     decryptor
-                        .decrypt_padded_vec_mut::<ZeroPadding>(&encrypted_message)
+                        .decrypt_padded_vec_mut::<Pkcs7>(&encrypted_message)
                         .map_err(|e| anyhow::anyhow!(e))?
                 }
                 AescbcHmacJweEncryption::A192cbcHs384 => {
-                    use aes::cipher::{block_padding::ZeroPadding, BlockDecryptMut, KeyIvInit};
+                    use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
                     let mut default_iv = [0; 16];
                     if let Some(iv) = iv {
                         default_iv.copy_from_slice(&iv[..16]);
@@ -207,11 +207,11 @@ impl JweContentEncryption for AescbcHmacJweEncryption {
                     let decryptor =
                         cbc::Decryptor::<aes::Aes192>::new(enc_key.into(), &default_iv.into());
                     decryptor
-                        .decrypt_padded_vec_mut::<ZeroPadding>(&encrypted_message)
+                        .decrypt_padded_vec_mut::<Pkcs7>(&encrypted_message)
                         .map_err(|e| anyhow::anyhow!(e))?
                 }
                 AescbcHmacJweEncryption::A256cbcHs512 => {
-                    use aes::cipher::{block_padding::ZeroPadding, BlockDecryptMut, KeyIvInit};
+                    use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
                     let mut default_iv = [0; 16];
                     if let Some(iv) = iv {
                         default_iv.copy_from_slice(&iv[..16]);
@@ -219,7 +219,7 @@ impl JweContentEncryption for AescbcHmacJweEncryption {
                     let decryptor =
                         cbc::Decryptor::<aes::Aes256>::new(enc_key.into(), &default_iv.into());
                     decryptor
-                        .decrypt_padded_vec_mut::<ZeroPadding>(encrypted_message)
+                        .decrypt_padded_vec_mut::<Pkcs7>(encrypted_message)
                         .map_err(|e| anyhow::anyhow!(e))?
                 }
             };
