@@ -88,6 +88,7 @@ rsa = { version = "0.10.0-rc.9", optional = true, features = [
 signature = "=3.0.0-rc.4"
 crypto-bigint = "=0.7.0-rc.8"
 crypto-primes = "=0.7.0-pre.2"
+pkcs1 = "=0.8.0-rc.3"
 cbc = { version = "0.1.2", features = ["alloc"], optional = true }
 aes = { version = "0.8.4", optional = true }
 hmac = { version = "0.13.0-rc.3", optional = true }
