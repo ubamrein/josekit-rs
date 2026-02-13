@@ -12,8 +12,6 @@ use crate::{JoseError, JoseHeader, Number, Value};
 use anyhow::bail;
 #[cfg(feature = "rustcrypto")]
 use hmac::digest;
-#[cfg(feature = "rustcrypto")]
-use hmac::digest::core_api::CoreProxy;
 #[cfg(feature = "openssl")]
 use openssl::aes::{self, AesKey};
 #[cfg(feature = "openssl")]
