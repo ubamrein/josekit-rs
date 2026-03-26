@@ -139,6 +139,10 @@ impl Jwk {
                         Some(_) => bail!("The parameter 'x' must be a string."),
                         None => bail!("The key type 'RSA' must have parameter 'n'."),
                     }
+                    if let Some(alg) = self.map.get("alg").and_then(|a| a.as_str()) {
+                        jwk.map
+                            .insert("alg".to_string(), Value::String(alg.to_string()));
+                    }
                     jwk
                 }
                 "EC" => {
@@ -175,6 +179,10 @@ impl Jwk {
                         Some(_) => bail!("The parameter 'x' must be a string."),
                         None => bail!("The key type 'EC' must have parameter 'y'."),
                     }
+                    if let Some(alg) = self.map.get("alg").and_then(|a| a.as_str()) {
+                        jwk.map
+                            .insert("alg".to_string(), Value::String(alg.to_string()));
+                    }
                     jwk
                 }
                 "OKP" => {
@@ -203,6 +211,10 @@ impl Jwk {
                         }
                         Some(_) => bail!("The parameter 'x' must be a string."),
                         None => bail!("The key type 'OKP' must have parameter 'x'."),
+                    }
+                    if let Some(alg) = self.map.get("alg").and_then(|a| a.as_str()) {
+                        jwk.map
+                            .insert("alg".to_string(), Value::String(alg.to_string()));
                     }
                     jwk
                 }
