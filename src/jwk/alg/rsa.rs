@@ -6,10 +6,6 @@ use openssl::pkey::{PKey, Private};
 #[cfg(feature = "openssl")]
 use openssl::rsa::Rsa;
 #[cfg(feature = "rustcrypto")]
-use rand::rngs::OsRng;
-#[cfg(feature = "rustcrypto")]
-use rsa::pkcs1::DecodeRsaPrivateKey;
-#[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePrivateKey;
@@ -94,7 +90,6 @@ impl RsaKeyPair {
     /// * `bits` - RSA key length
     pub fn generate(bits: u32) -> Result<RsaKeyPair, JoseError> {
         #[cfg(feature = "rustcrypto")]
-        use rand::rngs::OsRng;
         (|| -> anyhow::Result<RsaKeyPair> {
             #[cfg(feature = "openssl")]
             let rsa = Rsa::generate(bits)?;

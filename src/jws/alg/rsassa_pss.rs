@@ -17,9 +17,7 @@ use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePublicKey;
 #[cfg(feature = "rustcrypto")]
-use rsa::pkcs8::{self, SubjectPublicKeyInfo, SubjectPublicKeyInfoRef};
-#[cfg(feature = "rustcrypto")]
-use sha2::Sha256;
+use rsa::pkcs8::SubjectPublicKeyInfoRef;
 
 use crate::jwk::{alg::rsa::RsaKeyPair, alg::rsapss::RsaPssKeyPair, Jwk};
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
@@ -575,10 +573,10 @@ impl JwsSigner for RsassaPssJwsSigner {
     #[cfg(feature = "rustcrypto")]
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError> {
         (|| -> anyhow::Result<Vec<u8>> {
-            use rand::rngs::OsRng;
             use rsa::{traits::SignatureScheme, Pss};
             use sha1::Sha1;
-            use sha2::{Sha256, Sha384, Sha512};
+            use sha2::{Digest, Sha256, Sha384, Sha512};
+            let mut rng = rand::rng();
 
             use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
             let md = match &self.algorithm.hash_algorithm() {
@@ -587,13 +585,25 @@ impl JwsSigner for RsassaPssJwsSigner {
                 HashAlgorithm::Sha384 => MessageDigest::sha384(),
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
-            let signer = match &self.algorithm.hash_algorithm() {
-                HashAlgorithm::Sha1 => Pss::new::<Sha1>(),
-                HashAlgorithm::Sha256 => Pss::new::<Sha256>(),
-                HashAlgorithm::Sha384 => Pss::new::<Sha384>(),
-                HashAlgorithm::Sha512 => Pss::new::<Sha512>(),
+            let signature = match &self.algorithm.hash_algorithm() {
+                HashAlgorithm::Sha1 => {
+                    let signer = Pss::<Sha1>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, &md.hash(message))?
+                }
+                HashAlgorithm::Sha256 => {
+                    let signer = Pss::<Sha256>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, &md.hash(message))?
+                }
+                HashAlgorithm::Sha384 => {
+                    let signer = Pss::<Sha384>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, &md.hash(message))?
+                }
+                HashAlgorithm::Sha512 => {
+                    let signer = Pss::<Sha512>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, &md.hash(message))?
+                }
             };
-            let signature = signer.sign(Some(&mut OsRng), &self.private_key, &md.hash(message))?;
+
             Ok(signature)
         })()
         .map_err(|err| JoseError::InvalidSignature(err))
@@ -676,18 +686,45 @@ impl JwsVerifier for RsassaPssJwsVerifier {
                 HashAlgorithm::Sha384 => MessageDigest::sha384(),
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
-            let verifier = match &self.algorithm.hash_algorithm() {
-                HashAlgorithm::Sha1 => Pss::new::<Sha1>(),
-                HashAlgorithm::Sha256 => Pss::new::<Sha256>(),
-                HashAlgorithm::Sha384 => Pss::new::<Sha384>(),
-                HashAlgorithm::Sha512 => Pss::new::<Sha512>(),
+            match &self.algorithm.hash_algorithm() {
+                HashAlgorithm::Sha1 => {
+                    let verifier = Pss::<Sha1>::new();
+                    if verifier
+                        .verify(&self.public_key, &md.hash(message), signature)
+                        .is_err()
+                    {
+                        bail!("The signature does not match.");
+                    }
+                }
+                HashAlgorithm::Sha256 => {
+                    let verifier = Pss::<Sha256>::new();
+                    if verifier
+                        .verify(&self.public_key, &md.hash(message), signature)
+                        .is_err()
+                    {
+                        bail!("The signature does not match.");
+                    }
+                }
+                HashAlgorithm::Sha384 => {
+                    let verifier = Pss::<Sha384>::new();
+                    if verifier
+                        .verify(&self.public_key, &md.hash(message), signature)
+                        .is_err()
+                    {
+                        bail!("The signature does not match.");
+                    }
+                }
+                HashAlgorithm::Sha512 => {
+                    let verifier = Pss::<Sha512>::new();
+                    if verifier
+                        .verify(&self.public_key, &md.hash(message), signature)
+                        .is_err()
+                    {
+                        bail!("The signature does not match.");
+                    }
+                }
             };
-            if verifier
-                .verify(&self.public_key, &md.hash(message), signature)
-                .is_err()
-            {
-                bail!("The signature does not match.");
-            }
+
             Ok(())
         })()
         .map_err(|err| JoseError::InvalidSignature(err))

@@ -4,11 +4,8 @@ use std::ops::Deref;
 
 #[cfg(feature = "rustcrypto")]
 use aes_gcm::{
-    aead::{
-        consts::{U12, U16},
-        Payload,
-    },
-    aes::{cipher::Unsigned, Aes128, Aes192, Aes256},
+    aead::{consts::U12, Payload},
+    aes::{Aes128, Aes192, Aes256},
     AeadInPlace, AesGcm, KeyInit, Nonce,
 };
 
@@ -338,12 +335,12 @@ impl JweEncrypter for AesgcmkwJweEncrypter {
         }
     }
 
-    fn compute_content_encryption_key(
-        &self,
+    fn compute_content_encryption_key<'a>(
+        &'a self,
         _cencryption: &dyn JweContentEncryption,
         _in_header: &JweHeader,
         _out_header: &mut JweHeader,
-    ) -> Result<Option<Cow<[u8]>>, JoseError> {
+    ) -> Result<Option<Cow<'a, [u8]>>, JoseError> {
         Ok(None)
     }
 
@@ -424,12 +421,12 @@ impl JweDecrypter for AesgcmkwJweDecrypter {
         }
     }
 
-    fn decrypt(
-        &self,
+    fn decrypt<'a>(
+        &'a self,
         encrypted_key: Option<&[u8]>,
         _cencryption: &dyn JweContentEncryption,
         header: &JweHeader,
-    ) -> Result<Cow<[u8]>, JoseError> {
+    ) -> Result<Cow<'a, [u8]>, JoseError> {
         (|| -> anyhow::Result<Cow<[u8]>> {
             let encrypted_key = match encrypted_key {
                 Some(val) => val,

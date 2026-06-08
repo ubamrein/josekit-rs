@@ -435,12 +435,13 @@ impl JwsSigner for RsassaJwsSigner {
     #[cfg(feature = "rustcrypto")]
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError> {
         (|| -> anyhow::Result<Vec<u8>> {
-            use rand::rngs::OsRng;
             use rsa::{traits::SignatureScheme, Pkcs1v15Sign};
             use sha1::Sha1;
             use sha2::{Sha256, Sha384, Sha512};
 
             use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
+
+            let mut rng = rand::rng();
 
             let signer = match &self.algorithm.hash_algorithm() {
                 HashAlgorithm::Sha1 => Pkcs1v15Sign::new::<Sha1>(),
@@ -455,7 +456,7 @@ impl JwsSigner for RsassaJwsSigner {
                 HashAlgorithm::Sha512 => MessageDigest::sha512(),
             };
 
-            let signature = signer.sign(Some(&mut OsRng), &self.private_key, &md.hash(message))?;
+            let signature = signer.sign(Some(&mut rng), &self.private_key, &md.hash(message))?;
             Ok(signature)
         })()
         .map_err(|err| JoseError::InvalidSignature(err))
