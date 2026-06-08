@@ -10,8 +10,6 @@ use crate::jwk::Jwk;
 use crate::util::{self, HashAlgorithm};
 use crate::{JoseError, JoseHeader, Number, Value};
 use anyhow::bail;
-#[cfg(feature = "rustcrypto")]
-use hmac::digest;
 #[cfg(feature = "openssl")]
 use openssl::aes::{self, AesKey};
 #[cfg(feature = "openssl")]
@@ -337,12 +335,12 @@ impl JweEncrypter for Pbes2HmacAeskwJweEncrypter {
         }
     }
 
-    fn compute_content_encryption_key(
-        &self,
+    fn compute_content_encryption_key<'a>(
+        &'a self,
         _cencryption: &dyn JweContentEncryption,
         _in_header: &JweHeader,
         _out_header: &mut JweHeader,
-    ) -> Result<Option<Cow<[u8]>>, JoseError> {
+    ) -> Result<Option<Cow<'a, [u8]>>, JoseError> {
         Ok(None)
     }
 
@@ -405,6 +403,7 @@ impl JweEncrypter for Pbes2HmacAeskwJweEncrypter {
 
             let mut encrypted_key = vec![0; key.len() + 8];
             match aes::wrap_key(&aes, None, &mut encrypted_key, &key) {
+                #[allow(unused)]
                 Ok(val) =>
                 {
                     #[cfg(feature = "openssl")]
@@ -462,12 +461,12 @@ impl JweDecrypter for Pbes2HmacAeskwJweDecrypter {
         }
     }
 
-    fn decrypt(
-        &self,
+    fn decrypt<'a>(
+        &'a self,
         encrypted_key: Option<&[u8]>,
         _cencryption: &dyn JweContentEncryption,
         header: &JweHeader,
-    ) -> Result<Cow<[u8]>, JoseError> {
+    ) -> Result<Cow<'a, [u8]>, JoseError> {
         (|| -> anyhow::Result<Cow<[u8]>> {
             let encrypted_key = match encrypted_key {
                 Some(val) => val,
@@ -525,6 +524,7 @@ impl JweDecrypter for Pbes2HmacAeskwJweDecrypter {
 
             let mut key = vec![0; encrypted_key.len() - 8];
             match aes::unwrap_key(&aes, None, &mut key, &encrypted_key) {
+                #[allow(unused)]
                 Ok(val) =>
                 {
                     #[cfg(feature = "openssl")]

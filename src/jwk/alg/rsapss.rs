@@ -6,17 +6,15 @@ use openssl::pkey::{PKey, Private};
 #[cfg(feature = "openssl")]
 use openssl::rsa::Rsa;
 #[cfg(feature = "rustcrypto")]
-use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey, RsaPrivateKey};
+use rsa::pkcs1::DecodeRsaPrivateKey;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::der::Decode;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePrivateKey;
 #[cfg(feature = "rustcrypto")]
-use rsa::pkcs8::{DecodePublicKey, PrivateKeyInfo, PrivateKeyInfoRef};
+use rsa::pkcs8::PrivateKeyInfoRef;
 #[cfg(feature = "rustcrypto")]
 use rsa::traits::{PrivateKeyParts, PublicKeyParts};
-#[cfg(feature = "rustcrypto")]
-use sha2::Sha256;
 
 use crate::jwk::{alg::rsa::RsaKeyPair, Jwk, KeyPair};
 use crate::util::der::{DerBuilder, DerClass, DerReader, DerType};

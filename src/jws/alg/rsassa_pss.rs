@@ -210,6 +210,7 @@ impl RsassaPssJwsAlgorithm {
         (|| -> anyhow::Result<RsassaPssJwsVerifier> {
             let input = input.as_ref();
             let spki_der_vec;
+            #[allow(unused)]
             let spki_der = match RsaPssKeyPair::detect_pkcs8(input, true) {
                 Some((hash, mgf1_hash, salt_len)) => {
                     if hash != self.hash_algorithm() {
@@ -575,7 +576,7 @@ impl JwsSigner for RsassaPssJwsSigner {
         (|| -> anyhow::Result<Vec<u8>> {
             use rsa::{traits::SignatureScheme, Pss};
             use sha1::Sha1;
-            use sha2::{Digest, Sha256, Sha384, Sha512};
+            use sha2::{Sha256, Sha384, Sha512};
             let mut rng = rand::rng();
 
             use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;

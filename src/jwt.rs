@@ -178,8 +178,6 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{Duration, SystemTime};
 
-    #[cfg(feature = "rustcrypto")]
-    use crate::jwe::alg::pbes2_hmac_aeskw::MessageDigest;
     #[allow(deprecated)]
     use crate::jwe::{
         Dir, A128GCMKW, A128KW, A192GCMKW, A192KW, A256GCMKW, A256KW, ECDH_ES, ECDH_ES_A128KW,
@@ -515,7 +513,7 @@ mod tests {
         let jwk_private = Jwk::from_bytes(&load_file("jwk/EC_secp256k1_private.jwk")?)?;
         let jwk_public = Jwk::from_bytes(&load_file("jwk/EC_secp256k1_public.jwk")?)?;
         let signer = alg.signer_from_jwk(&jwk_private)?;
-        let stuff = signer.sign(content.as_ref())?;
+        let _ = signer.sign(content.as_ref())?;
         let verifier = alg.verifier_from_jwk(&jwk_public)?;
         let sig = decode_base64_urlsafe_no_pad(&content_parts[2])?;
         // let content = MessageDigest::sha256().hash(content.as_bytes());

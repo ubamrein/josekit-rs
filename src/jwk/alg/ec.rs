@@ -51,7 +51,7 @@ impl EcCurve {
         }
     }
 
-    fn coordinate_size(&self) -> usize {
+    pub fn coordinate_size(&self) -> usize {
         match self {
             Self::P256 | Self::Secp256k1 => 32,
             Self::P384 => 48,
