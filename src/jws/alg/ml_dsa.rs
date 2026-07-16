@@ -398,7 +398,7 @@ mod tests {
         ] {
             let key_pair = alg.generate_key_pair()?;
 
-            let signer = alg.signer_from_der(&key_pair.to_raw_private_key())?;
+            let signer = alg.signer_from_der(&key_pair.to_raw_private_key()?)?;
             let signature = signer.sign(input)?;
 
             let verifier = alg.verifier_from_der(&key_pair.to_der_public_key())?;

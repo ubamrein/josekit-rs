@@ -80,32 +80,35 @@ impl PublicKey {
             PublicKey::MlDsa87(verifying_key) => verifying_key.to_bytes().to_vec(),
         }
     }
-    pub fn to_der(&self) -> Vec<u8> {
-        match self {
-            PublicKey::MlDsa44(verifying_key) => {
-                verifying_key.to_public_key_der().unwrap().to_vec()
-            }
-            PublicKey::MlDsa65(verifying_key) => {
-                verifying_key.to_public_key_der().unwrap().to_vec()
-            }
-            PublicKey::MlDsa87(verifying_key) => {
-                verifying_key.to_public_key_der().unwrap().to_vec()
-            }
-        }
+    pub fn to_der(&self) -> Result<Vec<u8>, anyhow::Error> {
+        Ok(match self {
+            PublicKey::MlDsa44(verifying_key) => verifying_key
+                .to_public_key_der()
+                .context("Failed to decode der")?
+                .to_vec(),
+            PublicKey::MlDsa65(verifying_key) => verifying_key
+                .to_public_key_der()
+                .context("Failed to decode der")?
+                .to_vec(),
+            PublicKey::MlDsa87(verifying_key) => verifying_key
+                .to_public_key_der()
+                .context("Failed to decode der")?
+                .to_vec(),
+        })
     }
-    pub fn to_pem(&self) -> String {
-        match self {
+    pub fn to_pem(&self) -> Result<String, anyhow::Error> {
+        Ok(match self {
             PublicKey::MlDsa44(verifying_key) => verifying_key
                 .to_public_key_pem(base64ct::LineEnding::CRLF)
-                .unwrap(),
+                .context("failed to encode as a pem")?,
 
             PublicKey::MlDsa65(verifying_key) => verifying_key
                 .to_public_key_pem(base64ct::LineEnding::CRLF)
-                .unwrap(),
+                .context("failed to encode as a pem")?,
             PublicKey::MlDsa87(verifying_key) => verifying_key
                 .to_public_key_pem(base64ct::LineEnding::CRLF)
-                .unwrap(),
-        }
+                .context("failed to encode as a pem")?,
+        })
     }
     pub fn from_der(der: &[u8]) -> Result<Self, JoseError> {
         use ml_dsa::pkcs8::DecodePublicKey;
@@ -194,18 +197,24 @@ impl PrivateKey {
             PrivateKey::MlDsa87(signing_key) => signing_key.to_seed().to_vec(),
         }
     }
-    pub fn to_der_private_key(&self) -> Vec<u8> {
-        match self {
-            PrivateKey::MlDsa44(signing_key) => {
-                signing_key.to_pkcs8_der().unwrap().to_bytes().to_vec()
-            }
-            PrivateKey::MlDsa65(signing_key) => {
-                signing_key.to_pkcs8_der().unwrap().to_bytes().to_vec()
-            }
-            PrivateKey::MlDsa87(signing_key) => {
-                signing_key.to_pkcs8_der().unwrap().to_bytes().to_vec()
-            }
-        }
+    pub fn to_der_private_key(&self) -> Result<Vec<u8>, anyhow::Error> {
+        Ok(match self {
+            PrivateKey::MlDsa44(signing_key) => signing_key
+                .to_pkcs8_der()
+                .context("failed to encode as der")?
+                .to_bytes()
+                .to_vec(),
+            PrivateKey::MlDsa65(signing_key) => signing_key
+                .to_pkcs8_der()
+                .context("failed to encode as der")?
+                .to_bytes()
+                .to_vec(),
+            PrivateKey::MlDsa87(signing_key) => signing_key
+                .to_pkcs8_der()
+                .context("failed to encode as der")?
+                .to_bytes()
+                .to_vec(),
+        })
     }
     pub fn to_pem_private_key(&self) -> Vec<u8> {
         match self {
@@ -453,7 +462,7 @@ impl MlDsaKeyPair {
         })
     }
 
-    pub fn to_raw_private_key(&self) -> Vec<u8> {
+    pub fn to_raw_private_key(&self) -> Result<Vec<u8>, anyhow::Error> {
         self.private_key.to_der_private_key()
     }
 
@@ -504,11 +513,11 @@ impl KeyPair for MlDsaKeyPair {
         }
     }
     fn to_der_private_key(&self) -> Vec<u8> {
-        self.private_key.to_der_private_key()
+        self.private_key.to_der_private_key().unwrap_or_default()
     }
 
     fn to_der_public_key(&self) -> Vec<u8> {
-        self.private_key.public_key().to_der()
+        self.private_key.public_key().to_der().unwrap_or_default()
     }
 
     fn to_pem_private_key(&self) -> Vec<u8> {
@@ -516,7 +525,12 @@ impl KeyPair for MlDsaKeyPair {
     }
 
     fn to_pem_public_key(&self) -> Vec<u8> {
-        self.private_key.public_key().to_pem().as_bytes().to_vec()
+        self.private_key
+            .public_key()
+            .to_pem()
+            .unwrap_or_default()
+            .as_bytes()
+            .to_vec()
     }
 
     fn to_jwk_private_key(&self) -> Jwk {
