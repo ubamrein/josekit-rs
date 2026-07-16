@@ -41,6 +41,15 @@ pub use EcdsaJwsAlgorithm::Es512 as ES512;
 use crate::jws::alg::eddsa::EddsaJwsAlgorithm;
 pub use EddsaJwsAlgorithm::Eddsa as EdDSA;
 
+#[cfg(feature = "pqc")]
+use crate::jws::alg::ml_dsa::MldsaJwsAlgorithm;
+#[cfg(feature = "pqc")]
+pub use MldsaJwsAlgorithm::MlDSA44;
+#[cfg(feature = "pqc")]
+pub use MldsaJwsAlgorithm::MlDSA65;
+#[cfg(feature = "pqc")]
+pub use MldsaJwsAlgorithm::MlDSA87;
+
 static DEFAULT_CONTEXT: LazyLock<JwsContext> = LazyLock::new(|| JwsContext::new());
 
 /// Return a representation of the data that is formatted by compact serialization.
