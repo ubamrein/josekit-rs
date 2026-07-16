@@ -130,6 +130,7 @@ impl JweContentEncryption for AesgcmJweEncryption {
             #[cfg(feature = "openssl")]
             let message = symm::decrypt_aead(cipher, key, iv, aad, encrypted_message, tag)?;
 
+            #[allow(unused)]
             let mut new_iv = [0; 12];
             #[cfg(feature = "rustcrypto")]
             if let Some(the_iv) = iv {

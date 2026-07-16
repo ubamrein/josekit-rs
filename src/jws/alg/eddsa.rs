@@ -138,6 +138,7 @@ impl EddsaJwsAlgorithm {
         input: impl AsRef<[u8]>,
     ) -> Result<EddsaJwsVerifier, JoseError> {
         (|| -> anyhow::Result<EddsaJwsVerifier> {
+            #[allow(unused)]
             let (spki_der, curve) = match EdKeyPair::detect_pkcs8(input.as_ref(), true) {
                 Some(curve) => (input.as_ref(), curve),
                 None => bail!("The EdDSA public key must be wrapped by PKCS#8 format."),
@@ -170,6 +171,7 @@ impl EddsaJwsAlgorithm {
     ) -> Result<EddsaJwsVerifier, JoseError> {
         (|| -> anyhow::Result<EddsaJwsVerifier> {
             let (alg, data) = util::parse_pem(input.as_ref())?;
+            #[allow(unused)]
             let (spki_der, curve) = match alg.as_str() {
                 "PUBLIC KEY" => match EdKeyPair::detect_pkcs8(&data, true) {
                     Some(curve) => (data.as_slice(), curve),

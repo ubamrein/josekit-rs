@@ -385,12 +385,12 @@ impl JweEncrypter for RsaesJweEncrypter {
         }
     }
 
-    fn compute_content_encryption_key(
-        &self,
+    fn compute_content_encryption_key<'a>(
+        &'a self,
         _cencryption: &dyn JweContentEncryption,
         _in_header: &JweHeader,
         _out_header: &mut JweHeader,
-    ) -> Result<Option<Cow<[u8]>>, JoseError> {
+    ) -> Result<Option<Cow<'a, [u8]>>, JoseError> {
         Ok(None)
     }
 
@@ -404,6 +404,8 @@ impl JweEncrypter for RsaesJweEncrypter {
         (|| -> anyhow::Result<Option<Vec<u8>>> {
             #[cfg(feature = "openssl")]
             let rsa = self.public_key.rsa()?;
+            #[cfg(feature = "rustcrypto")]
+            let mut rng = rand::rng();
             let encrypted_key = match self.algorithm {
                 #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::Rsa1_5 => {
@@ -412,12 +414,12 @@ impl JweEncrypter for RsaesJweEncrypter {
                     encrypted_key.truncate(len);
                     encrypted_key
                 }
+
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::Rsa1_5 => {
-                    use rand::rngs::OsRng;
                     use rsa::{traits::PaddingScheme, Pkcs1v15Encrypt};
                     let encrypted_key =
-                        Pkcs1v15Encrypt.encrypt(&mut OsRng, &self.public_key, &key)?;
+                        Pkcs1v15Encrypt.encrypt(&mut rng, &self.public_key, &key)?;
                     encrypted_key
                 }
                 #[cfg(feature = "openssl")]
@@ -429,11 +431,10 @@ impl JweEncrypter for RsaesJweEncrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha1::Sha1>();
-                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    let oaep = rsa::Oaep::<sha1::Sha1>::new();
+                    let encrypted_key = oaep.encrypt(&mut rng, &self.public_key, &key)?;
                     encrypted_key
                 }
                 #[cfg(feature = "openssl")]
@@ -444,11 +445,10 @@ impl JweEncrypter for RsaesJweEncrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep256 => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha2::Sha256>();
-                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    let oaep = rsa::Oaep::<sha2::Sha256>::new();
+                    let encrypted_key = oaep.encrypt(&mut rng, &self.public_key, &key)?;
                     encrypted_key
                 }
                 #[cfg(feature = "openssl")]
@@ -459,11 +459,10 @@ impl JweEncrypter for RsaesJweEncrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep384 => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha2::Sha384>();
-                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    let oaep = rsa::Oaep::<sha2::Sha384>::new();
+                    let encrypted_key = oaep.encrypt(&mut rng, &self.public_key, &key)?;
                     encrypted_key
                 }
                 #[cfg(feature = "openssl")]
@@ -474,11 +473,10 @@ impl JweEncrypter for RsaesJweEncrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep512 => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha2::Sha512>();
-                    let encrypted_key = oaep.encrypt(&mut OsRng, &self.public_key, &key)?;
+                    let oaep = rsa::Oaep::<sha2::Sha512>::new();
+                    let encrypted_key = oaep.encrypt(&mut rng, &self.public_key, &key)?;
                     encrypted_key
                 }
             };
@@ -534,12 +532,12 @@ impl JweDecrypter for RsaesJweDecrypter {
     }
 
     #[allow(deprecated)]
-    fn decrypt(
-        &self,
+    fn decrypt<'a>(
+        &'a self,
         encrypted_key: Option<&[u8]>,
         _cencryption: &dyn JweContentEncryption,
         _header: &JweHeader,
-    ) -> Result<Cow<[u8]>, JoseError> {
+    ) -> Result<Cow<'a, [u8]>, JoseError> {
         (|| -> anyhow::Result<Cow<[u8]>> {
             let encrypted_key = match encrypted_key {
                 Some(val) => val,
@@ -547,6 +545,8 @@ impl JweDecrypter for RsaesJweDecrypter {
             };
             #[cfg(feature = "openssl")]
             let rsa = self.private_key.rsa()?;
+            #[cfg(feature = "rustcrypto")]
+            let mut rng = rand::rng();
             let key = match self.algorithm {
                 #[cfg(feature = "openssl")]
                 RsaesJweAlgorithm::Rsa1_5 => {
@@ -557,10 +557,9 @@ impl JweDecrypter for RsaesJweDecrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::Rsa1_5 => {
-                    use rand::rngs::OsRng;
                     use rsa::{traits::PaddingScheme, Pkcs1v15Encrypt};
                     let key = Pkcs1v15Encrypt.decrypt(
-                        Some(&mut OsRng),
+                        Some(&mut rng),
                         &self.private_key,
                         &encrypted_key,
                     )?;
@@ -575,11 +574,10 @@ impl JweDecrypter for RsaesJweDecrypter {
                 }
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha1::Sha1>();
-                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    let oaep = rsa::Oaep::<sha1::Sha1>::new();
+                    let key = oaep.decrypt(Some(&mut rng), &self.private_key, &encrypted_key)?;
                     key
                 }
                 #[cfg(feature = "openssl")]
@@ -590,11 +588,10 @@ impl JweDecrypter for RsaesJweDecrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep256 => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha2::Sha256>();
-                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    let oaep = rsa::Oaep::<sha2::Sha256>::new();
+                    let key = oaep.decrypt(Some(&mut rng), &self.private_key, &encrypted_key)?;
                     key
                 }
                 #[cfg(feature = "openssl")]
@@ -605,11 +602,10 @@ impl JweDecrypter for RsaesJweDecrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep384 => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha2::Sha384>();
-                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    let oaep = rsa::Oaep::<sha2::Sha384>::new();
+                    let key = oaep.decrypt(Some(&mut rng), &self.private_key, &encrypted_key)?;
                     key
                 }
                 #[cfg(feature = "openssl")]
@@ -620,11 +616,10 @@ impl JweDecrypter for RsaesJweDecrypter {
                 )?,
                 #[cfg(feature = "rustcrypto")]
                 RsaesJweAlgorithm::RsaOaep512 => {
-                    use rand::rngs::OsRng;
                     use rsa::traits::PaddingScheme;
 
-                    let oaep = rsa::Oaep::new::<sha2::Sha512>();
-                    let key = oaep.decrypt(Some(&mut OsRng), &self.private_key, &encrypted_key)?;
+                    let oaep = rsa::Oaep::<sha2::Sha512>::new();
+                    let key = oaep.decrypt(Some(&mut rng), &self.private_key, &encrypted_key)?;
                     key
                 }
             };

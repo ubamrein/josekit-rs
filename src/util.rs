@@ -10,9 +10,7 @@ use base64::Engine as _;
 #[cfg(feature = "openssl")]
 use openssl::rand;
 #[cfg(feature = "rustcrypto")]
-use rand::random;
-#[cfg(feature = "rustcrypto")]
-use rand::RngCore;
+use rand::Rng;
 use regex;
 
 pub use crate::util::hash_algorithm::HashAlgorithm;

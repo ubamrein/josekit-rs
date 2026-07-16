@@ -29,6 +29,7 @@ use crate::{
     jwk::alg::ed::EdCurve,
 };
 
+use crate::jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader};
 use crate::jwk::alg::{
     ec::{EcCurve, EcKeyPair},
     ecx::{EcxCurve, EcxKeyPair},
@@ -36,13 +37,10 @@ use crate::jwk::alg::{
 use crate::jwk::Jwk;
 use crate::util;
 use crate::util::der::{DerReader, DerType};
+
 use crate::util::oid::{
     OID_ID_EC_PUBLIC_KEY, OID_PRIME256V1, OID_SECP256K1, OID_SECP384R1, OID_SECP521R1, OID_X25519,
     OID_X448,
-};
-use crate::{
-    jwe::{JweAlgorithm, JweContentEncryption, JweDecrypter, JweEncrypter, JweHeader},
-    util::oid::ObjectIdentifier,
 };
 use crate::{JoseError, JoseHeader, Map, Value};
 
@@ -84,10 +82,10 @@ impl PublicKey {
             PublicKey::K256(public_key) => public_key.to_encoded_point(false).y().unwrap().to_vec(),
             PublicKey::X25519(_) => unimplemented!("x25519 only uses single coordinate"),
             PublicKey::X448(_) => unimplemented!("X448 only uses single coordinate"),
-            PublicKey::Ed25519(verifying_key) => {
+            PublicKey::Ed25519(_verifying_key) => {
                 unimplemented!("ed25519 only uses single coordinate")
             }
-            PublicKey::Ed448(verifying_key) => unimplemented!("ed448 only uses single coordinate"),
+            PublicKey::Ed448(_verifying_key) => unimplemented!("ed448 only uses single coordinate"),
         }
     }
     pub fn ec_key_der(&self) -> Result<Vec<u8>, anyhow::Error> {
@@ -170,10 +168,10 @@ impl PublicKey {
             PublicKey::P384(key) => Ok(key.to_jwk_string().to_string()),
             PublicKey::P521(key) => Ok(key.to_jwk_string().to_string()),
             PublicKey::K256(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::X25519(key) => todo!("JWK not implemented for x25519"),
-            PublicKey::X448(key) => todo!("JWK not implemented for x448"),
-            PublicKey::Ed25519(key) => todo!("JWK not implemented for ed25519"),
-            PublicKey::Ed448(key) => todo!("JWK not implemented for ed448"),
+            PublicKey::X25519(_key) => todo!("JWK not implemented for x25519"),
+            PublicKey::X448(_key) => todo!("JWK not implemented for x448"),
+            PublicKey::Ed25519(_key) => todo!("JWK not implemented for ed25519"),
+            PublicKey::Ed448(_key) => todo!("JWK not implemented for ed448"),
         }
     }
     pub fn from_pkcs8_der_with_ed_curve(
@@ -221,7 +219,7 @@ impl PublicKey {
             }
         })
     }
-    pub fn from_pkcs8_der(key_type: EcdhEsKeyType, spki: &[u8]) -> Result<Self, anyhow::Error> {
+    fn from_pkcs8_der(key_type: EcdhEsKeyType, spki: &[u8]) -> Result<Self, anyhow::Error> {
         use anyhow::Context;
         Ok(match key_type {
             EcdhEsKeyType::Ec(ec_curve) => match ec_curve {
@@ -577,10 +575,10 @@ impl PrivateKey {
             PrivateKey::P384(key) => Ok(key.to_jwk_string().to_string()),
             PrivateKey::P521(key) => Ok(key.to_jwk_string().to_string()),
             PrivateKey::K256(key) => Ok(key.to_jwk_string().to_string()),
-            PrivateKey::X25519(key) => todo!("JWK not implemented for x25519"),
-            PrivateKey::X448(key) => todo!("JWK not implemented for x448"),
-            PrivateKey::Ed25519(key) => todo!("JWK not implemented for ed25519"),
-            PrivateKey::Ed448(key) => todo!("JWK not implemented for ed448"),
+            PrivateKey::X25519(_key) => todo!("JWK not implemented for x25519"),
+            PrivateKey::X448(_key) => todo!("JWK not implemented for x448"),
+            PrivateKey::Ed25519(_key) => todo!("JWK not implemented for ed25519"),
+            PrivateKey::Ed448(_key) => todo!("JWK not implemented for ed448"),
         }
     }
     pub fn from_pkcs8_for_ec_curve(
@@ -608,7 +606,7 @@ impl PrivateKey {
             )),
         })
     }
-    pub fn from_pkcs8(key_type: EcdhEsKeyType, pkcs8_der: &[u8]) -> Result<Self, anyhow::Error> {
+    fn from_pkcs8(key_type: EcdhEsKeyType, pkcs8_der: &[u8]) -> Result<Self, anyhow::Error> {
         Ok(match key_type {
             EcdhEsKeyType::Ec(ec_curve) => match ec_curve {
                 EcCurve::P256 => {
@@ -1318,13 +1316,26 @@ impl EcdhEsJweAlgorithm {
             }
 
             if let Some(val) = apu {
+                #[cfg(feature = "rustcrypto")]
                 hasher.update(val);
+                #[cfg(feature = "openssl")]
+                hasher.update(val)?;
             }
+            #[cfg(feature = "rustcrypto")]
             hasher.update(&apv_len_bytes);
+            #[cfg(feature = "openssl")]
+            hasher.update(&apv_len_bytes)?;
+
             if let Some(val) = apv {
+                #[cfg(feature = "rustcrypto")]
                 hasher.update(val);
+                #[cfg(feature = "openssl")]
+                hasher.update(val)?;
             }
+            #[cfg(feature = "rustcrypto")]
             hasher.update(&shared_key_len_bytes);
+            #[cfg(feature = "openssl")]
+            hasher.update(&shared_key_len_bytes)?;
 
             #[cfg(feature = "openssl")]
             let digest = hasher.finish()?;
@@ -1535,12 +1546,12 @@ impl JweEncrypter for EcdhEsJweEncrypter {
         }
     }
 
-    fn compute_content_encryption_key(
-        &self,
+    fn compute_content_encryption_key<'a>(
+        &'a self,
         cencryption: &dyn JweContentEncryption,
         _merged: &JweHeader,
         header: &mut JweHeader,
-    ) -> Result<Option<Cow<[u8]>>, JoseError> {
+    ) -> Result<Option<Cow<'a, [u8]>>, JoseError> {
         if let EcdhEsJweAlgorithm::EcdhEs = self.algorithm {
             let shared_key =
                 self.compute_shared_key(header, cencryption.name(), cencryption.key_len())?;
@@ -1572,6 +1583,7 @@ impl JweEncrypter for EcdhEsJweEncrypter {
 
                 let mut encrypted_key = vec![0; key.len() + 8];
                 match aes::wrap_key(&aes, None, &mut encrypted_key, &key) {
+                    #[allow(unused)]
                     Ok(len) =>
                     {
                         #[cfg(feature = "openssl")]
@@ -1637,12 +1649,12 @@ impl JweDecrypter for EcdhEsJweDecrypter {
         }
     }
 
-    fn decrypt(
-        &self,
+    fn decrypt<'a>(
+        &'a self,
         encrypted_key: Option<&[u8]>,
         cencryption: &dyn JweContentEncryption,
         header: &JweHeader,
-    ) -> Result<Cow<[u8]>, JoseError> {
+    ) -> Result<Cow<'a, [u8]>, JoseError> {
         (|| -> anyhow::Result<Cow<[u8]>> {
             match &self.algorithm {
                 EcdhEsJweAlgorithm::EcdhEs => {
@@ -1794,6 +1806,7 @@ impl JweDecrypter for EcdhEsJweDecrypter {
 
                 let mut key = vec![0; encrypted_key.len() - 8];
                 match aes::unwrap_key(&aes, None, &mut key, &encrypted_key) {
+                    #[allow(unused)]
                     Ok(len) =>
                     {
                         #[cfg(feature = "openssl")]

@@ -366,6 +366,7 @@ impl JwsSigner for EcdsaJwsSigner {
 
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError> {
         (|| -> anyhow::Result<Vec<u8>> {
+            #[allow(unused)]
             let md = match &self.algorithm.hash_algorithm() {
                 HashAlgorithm::Sha1 => MessageDigest::sha1(),
                 HashAlgorithm::Sha256 => MessageDigest::sha256(),
@@ -475,6 +476,7 @@ impl JwsVerifier for EcdsaJwsVerifier {
                 signature.to_vec()
             };
 
+            #[allow(unused)]
             let md = match &self.algorithm.hash_algorithm() {
                 HashAlgorithm::Sha1 => MessageDigest::sha1(),
                 HashAlgorithm::Sha256 => MessageDigest::sha256(),
