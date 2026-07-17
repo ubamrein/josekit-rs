@@ -9,7 +9,10 @@ use anyhow::bail;
 use crate::jwk::alg::ec::{EcCurve, EcKeyPair};
 use crate::jwk::alg::ecx::{EcxCurve, EcxKeyPair};
 use crate::jwk::alg::ed::{EdCurve, EdKeyPair};
+#[cfg(feature = "pqc")]
+use crate::jwk::alg::ml_dsa::{MlDsa, MlDsaKeyPair};
 use crate::jwk::alg::rsa::RsaKeyPair;
+use crate::jwk::KeyPair;
 use crate::util;
 use crate::{JoseError, Map, Value};
 
@@ -108,6 +111,15 @@ impl Jwk {
     /// * `curve` - A Ecx curve algorithm
     pub fn generate_ecx_key(curve: EcxCurve) -> Result<Self, JoseError> {
         let key_pair = EcxKeyPair::generate(curve)?;
+        Ok(key_pair.to_jwk_key_pair())
+    }
+    /// Generate a new Ml-DSA type JWK.
+    ///
+    /// # Arguments
+    /// * `variant` - The Ml-DSA parameter set
+    #[cfg(feature = "pqc")]
+    pub fn generate_mldsa_key(variant: MlDsa) -> Result<Self, JoseError> {
+        let key_pair = MlDsaKeyPair::generate(variant)?;
         Ok(key_pair.to_jwk_key_pair())
     }
 
