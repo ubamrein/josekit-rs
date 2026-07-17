@@ -127,6 +127,29 @@ impl Jwk {
     pub fn to_public_key(&self) -> Result<Self, JoseError> {
         (|| -> anyhow::Result<Jwk> {
             let jwk = match self.key_type() {
+                "AKP" => {
+                    let mut jwk = Jwk::new("AKP");
+                    match self.map.get("use") {
+                        Some(Value::String(val)) => {
+                            jwk.map
+                                .insert("use".to_string(), Value::String(val.clone()));
+                        }
+                        _ => {}
+                    }
+                    if let Some(alg) = self.map.get("alg").and_then(|a| a.as_str()) {
+                        jwk.map
+                            .insert("alg".to_string(), Value::String(alg.to_string()));
+                    }
+                    match self.map.get("pub") {
+                        Some(Value::String(val)) => {
+                            jwk.map
+                                .insert("pub".to_string(), Value::String(val.clone()));
+                        }
+                        Some(_) => bail!("The parameter 'pub' must be a string."),
+                        None => bail!("The key type 'AKP' must have parameter 'pub'."),
+                    }
+                    jwk
+                }
                 "oct" => bail!("The key type 'oct' doesn't have public key."),
                 "RSA" => {
                     let mut jwk = Jwk::new("RSA");
