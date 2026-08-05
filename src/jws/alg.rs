@@ -1,7 +1,7 @@
 use anyhow::bail;
 
 use crate::{
-    jwk::Jwk,
+    jwk::{Jwk, KeyPair},
     jws::{JwsSigner, JwsVerifier},
 };
 
@@ -185,9 +185,55 @@ impl TryFrom<&str> for Box<dyn JwsSigner> {
     }
 }
 
+impl TryFrom<&[u8]> for Box<dyn KeyPair> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let der = value.as_ref();
+        for alg in [crate::jws::ES256, crate::jws::ES384, crate::jws::ES512] {
+            let Ok(key_pair) = alg.key_pair_from_der(der) else {
+                continue;
+            };
+            return Ok(Box::new(key_pair));
+        }
+        for alg in [crate::jws::RS256, crate::jws::RS384, crate::jws::RS512] {
+            let Ok(key_pair) = alg.key_pair_from_der(der) else {
+                continue;
+            };
+            return Ok(Box::new(key_pair));
+        }
+        for alg in [crate::jws::PS256, crate::jws::PS384, crate::jws::PS512] {
+            let Ok(key_pair) = alg.key_pair_from_der(der) else {
+                continue;
+            };
+            return Ok(Box::new(key_pair));
+        }
+        for alg in [crate::jws::EdDSA] {
+            let Ok(key_pair) = alg.key_pair_from_der(der) else {
+                continue;
+            };
+            return Ok(Box::new(key_pair));
+        }
+        for alg in [
+            crate::jws::MlDSA44,
+            crate::jws::MlDSA65,
+            crate::jws::MlDSA87,
+        ] {
+            let Ok(key_pair) = alg.key_pair_from_der(der) else {
+                continue;
+            };
+            return Ok(Box::new(key_pair));
+        }
+        bail!("invalid algorithm")
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::jws::{alg::ecdsa::EcdsaJwsAlgorithm::Es256, JwsSigner, JwsVerifier};
+    use crate::{
+        jwk::KeyPair,
+        jws::{alg::ecdsa::EcdsaJwsAlgorithm::Es256, JwsSigner, JwsVerifier},
+    };
 
     #[test]
     fn test_from() {
@@ -200,5 +246,9 @@ mod tests {
 
         let sig = signer.sign(b"test").unwrap();
         verifier.verify(b"test", &sig).unwrap();
+
+        let kp: Box<dyn KeyPair> = sk.as_slice().try_into().unwrap();
+        assert_eq!(kp.algorithm(), Some("ES256"));
+        assert_eq!(kp.to_der_public_key(), pk);
     }
 }
