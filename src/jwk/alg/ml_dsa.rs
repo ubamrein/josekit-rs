@@ -7,6 +7,8 @@ use ml_dsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
 use ml_dsa::{KeyInit, Seed, SignatureEncoding};
 use ml_dsa::{Signer, Verifier, VerifyingKey};
 use serde_json::Value;
+use sha2::digest::Update;
+use signature::DigestSigner;
 
 use crate::JoseError;
 use crate::{
@@ -61,6 +63,19 @@ impl PrivateKey {
             PrivateKey::MlDsa44(signing_key) => signing_key.sign(msg).to_vec(),
             PrivateKey::MlDsa65(signing_key) => signing_key.sign(msg).to_vec(),
             PrivateKey::MlDsa87(signing_key) => signing_key.sign(msg).to_vec(),
+        }
+    }
+    pub fn sign_prehash(&self, digest: &[u8]) -> Vec<u8> {
+        match self {
+            PrivateKey::MlDsa44(signing_key) => {
+                signing_key.sign_digest(|d| d.update(digest)).to_vec()
+            }
+            PrivateKey::MlDsa65(signing_key) => {
+                signing_key.sign_digest(|d| d.update(digest)).to_vec()
+            }
+            PrivateKey::MlDsa87(signing_key) => {
+                signing_key.sign_digest(|d| d.update(digest)).to_vec()
+            }
         }
     }
 }

@@ -286,6 +286,11 @@ impl JwsSigner for MldsaJwsSigner {
             .map_err(|err| JoseError::InvalidSignature(err))
     }
 
+    fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, JoseError> {
+        (|| -> anyhow::Result<Vec<u8>> { Ok(self.private_key.sign_prehash(digest)) })()
+            .map_err(|err| JoseError::InvalidSignature(err))
+    }
+
     fn box_clone(&self) -> Box<dyn JwsSigner> {
         Box::new(self.clone())
     }

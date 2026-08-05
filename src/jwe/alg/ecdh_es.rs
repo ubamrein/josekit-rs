@@ -5,6 +5,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+
 #[cfg(feature = "openssl")]
 use openssl::{
     aes::{self, AesKey},
@@ -20,8 +21,6 @@ use rsa::pkcs8::{
     },
     PrivateKeyInfoRef, SubjectPublicKeyInfoRef,
 };
-#[cfg(feature = "rustcrypto")]
-use sha2::{Digest, Sha256};
 
 #[cfg(feature = "rustcrypto")]
 use crate::{
@@ -315,6 +314,43 @@ impl PublicKey {
                 verifying_key.verify(msg, &signature)?;
                 Ok(())
             }
+        }
+    }
+    pub fn verify_signature_prehashed(
+        &self,
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), anyhow::Error> {
+        match self {
+            PublicKey::Ed25519(verifying_key) => {
+                use ed25519_dalek::{Digest, DigestVerifier};
+                let signature = ed25519_dalek::Signature::from_slice(signature)?;
+                verifying_key.verify_digest(
+                    |d: &mut ed25519_dalek::Sha512| {
+                        d.update(ed25519_dalek::Sha512::digest(message));
+                        Ok(())
+                    },
+                    &signature,
+                )?;
+                Ok(())
+            }
+            PublicKey::Ed448(_verifying_key) => {
+                // use cx448::crypto_signature::DigestVerifier as Ed448DigestVerifier;
+                // use cx448::sha3::Digest;
+
+                // let signature = cx448::Signature::try_from(signature)?;
+                println!("after signature parsing");
+                // Ed448DigestVerifier::verify_digest(
+                //     verifying_key,
+                //     |d: &mut cx448::sha3::Sha3_512| {
+                //         cx448::sha3::Digest::update(d, cx448::sha3::Sha3_512::digest(message));
+                //     },
+                //     &signature,
+                // )?;
+                // Ok(())
+                unimplemented!("Trait issues")
+            }
+            _ => self.verify_signature(message, signature),
         }
     }
 }
@@ -727,6 +763,59 @@ impl PrivateKey {
                 let vk = signing_key.verifying_key();
                 println!("vk1: {:?}", vk.as_bytes());
                 signature.to_bytes().to_vec()
+            }
+        })
+    }
+    pub fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+        Ok(match self {
+            PrivateKey::P256(secret_key) => {
+                use p256::ecdsa::signature::hazmat::PrehashSigner;
+                let s: p256::ecdsa::SigningKey = secret_key.into();
+                let signature: p256::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::P384(secret_key) => {
+                use p384::ecdsa::signature::hazmat::PrehashSigner;
+                let s: p384::ecdsa::SigningKey = secret_key.into();
+                let signature: p384::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::P521(secret_key) => {
+                use p521::ecdsa::signature::hazmat::PrehashSigner;
+                let s: p521::ecdsa::SigningKey = p521::ecdsa::SigningKey::from_slice(
+                    secret_key.to_nonzero_scalar().to_bytes().as_slice(),
+                )?;
+                let signature: p521::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::K256(secret_key) => {
+                use k256::ecdsa::signature::hazmat::PrehashSigner;
+                let s: k256::ecdsa::SigningKey = secret_key.into();
+                let signature: k256::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::X25519(_) => unimplemented!("x25519 is DH algorithm"),
+            PrivateKey::X448(_) => unimplemented!("x448 is DH algorithm"),
+            PrivateKey::Ed25519(signing_key) => {
+                use ed25519_dalek::{Digest, DigestSigner};
+                let signature: ed25519_dalek::Signature =
+                    signing_key.sign_digest(|d: &mut ed25519_dalek::Sha512| d.update(digest));
+                signature.to_bytes().to_vec()
+            }
+            PrivateKey::Ed448(_signing_key) => {
+                // use cx448::crypto_signature::{
+                //     digest::Digest, digest::FixedOutput, digest::HashMarker, DigestSigner,
+
+                // };
+
+                // let signature: cx448::Signature = signing_key
+                //     .sign_digest::<cx448::crypto_signature::digest::Digest>(
+                //     |d: &mut cx448::sha3::Sha3_512| d.update(digest),
+                // );
+                // let vk = signing_key.verifying_key();
+                // println!("vk1: {:?}", vk.as_bytes());
+                // signature.to_bytes().to_vec()
+                unimplemented!("fucking annoying traits");
             }
         })
     }
@@ -1271,6 +1360,7 @@ impl EcdhEsJweAlgorithm {
         apu: Option<&[u8]>,
         apv: Option<&[u8]>,
     ) -> anyhow::Result<Vec<u8>> {
+        use sha2::{Digest, Sha256};
         let shared_key_len_bytes = ((shared_key_len * 8) as u32).to_be_bytes();
         let alg_len_bytes = (alg.len() as u32).to_be_bytes();
         let apu_len_bytes = (match apu {

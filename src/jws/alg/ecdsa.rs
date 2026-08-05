@@ -408,6 +408,38 @@ impl JwsSigner for EcdsaJwsSigner {
         })()
         .map_err(|err| JoseError::InvalidSignature(err))
     }
+    #[cfg(feature = "rustcrypto")]
+    fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, JoseError> {
+        (|| -> anyhow::Result<Vec<u8>> {
+            #[cfg(feature = "rustcrypto")]
+            let der_signature = self.private_key.sign_prehashed(digest)?;
+
+            let signature_len = self.signature_len();
+            let sep = signature_len / 2;
+
+            let mut signature = Vec::with_capacity(signature_len);
+            let mut reader = DerReader::from_bytes(&der_signature);
+            match reader.next()? {
+                Some(DerType::Sequence) => {}
+                _ => unreachable!("A generated signature is invalid."),
+            }
+            match reader.next()? {
+                Some(DerType::Integer) => {
+                    signature.extend_from_slice(&reader.to_be_bytes(false, sep));
+                }
+                _ => unreachable!("A generated signature is invalid."),
+            }
+            match reader.next()? {
+                Some(DerType::Integer) => {
+                    signature.extend_from_slice(&reader.to_be_bytes(false, sep));
+                }
+                _ => unreachable!("A generated signature is invalid."),
+            }
+
+            Ok(signature)
+        })()
+        .map_err(|err| JoseError::InvalidSignature(err))
+    }
 
     fn box_clone(&self) -> Box<dyn JwsSigner> {
         Box::new(self.clone())
@@ -519,9 +551,12 @@ impl Deref for EcdsaJwsVerifier {
 
 #[cfg(test)]
 mod tests {
+    use crate::jws::alg::ecdsa::EcdsaJwsAlgorithm::Es256;
+
     use super::*;
 
     use anyhow::Result;
+    use k256::sha2::{Digest, Sha256};
     use std::fs;
     use std::path::PathBuf;
 
@@ -759,6 +794,24 @@ mod tests {
         }
 
         Ok(())
+    }
+    #[test]
+    fn test_sign_prehashed_ecdsa() {
+        let kp = Es256.generate_key_pair().unwrap();
+        let sk = kp.to_der_private_key();
+        let pk = kp.to_der_public_key();
+        let signer: Box<dyn JwsSigner> = sk.as_slice().try_into().unwrap();
+        let verifier: Box<dyn JwsVerifier> = pk.as_slice().try_into().unwrap();
+        let normal_data = signer.sign(b"test").unwrap();
+        let prehashed_data = signer
+            .sign_prehashed(Sha256::digest(b"test").to_vec().as_slice())
+            .unwrap();
+        verifier
+            .verify(b"test", &normal_data)
+            .expect("normal data failed");
+        verifier
+            .verify(b"test", &prehashed_data)
+            .expect("prehashed data failed");
     }
 
     fn load_file(path: &str) -> Result<Vec<u8>> {

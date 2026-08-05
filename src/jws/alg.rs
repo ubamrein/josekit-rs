@@ -239,7 +239,7 @@ mod tests {
     fn test_from() {
         let k = Es256.generate_key_pair().unwrap();
         let pk = k.to_der_public_key();
-        let sk = k.into_private_key().private_key_to_der().unwrap();
+        let sk = k.into_private_key().ec_key_der().unwrap();
 
         let signer: Box<dyn JwsSigner> = sk.as_slice().try_into().unwrap();
         let verifier: Box<dyn JwsVerifier> = pk.as_slice().try_into().unwrap();

@@ -41,6 +41,17 @@ pub trait JwsSigner: Debug + Send + Sync {
     /// * `message` - The message data to sign.
     fn sign(&self, message: &[u8]) -> Result<Vec<u8>, JoseError>;
 
+    /// Return a signature directly on the digest.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - The message data to sign.
+    fn sign_prehashed(&self, _digest: &[u8]) -> Result<Vec<u8>, JoseError> {
+        Err(JoseError::UnsupportedSignatureAlgorithm(anyhow::anyhow!(
+            "Signed Prehashed not implemented"
+        )))
+    }
+
     fn box_clone(&self) -> Box<dyn JwsSigner>;
 }
 
@@ -65,6 +76,19 @@ pub trait JwsVerifier: Debug + Send + Sync {
     /// * `message` - a message data to verify.
     /// * `signature` - a signature data.
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), JoseError>;
+
+    /// Verify the data by the signature using the prehashed version.
+    /// For EcDSA or RSA this is equivalent as the normal verification,
+    /// but for algorithms using some kind of Fiat-Shamir Transform, they
+    /// usually contain a context variable specifying if it was the prehashed variant
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - a message data to verify.
+    /// * `signature` - a signature data.
+    fn verify_prehashed(&self, message: &[u8], signature: &[u8]) -> Result<(), JoseError> {
+        self.verify(message, signature)
+    }
 
     fn box_clone(&self) -> Box<dyn JwsVerifier>;
 }

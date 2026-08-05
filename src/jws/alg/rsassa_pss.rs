@@ -609,6 +609,37 @@ impl JwsSigner for RsassaPssJwsSigner {
         })()
         .map_err(|err| JoseError::InvalidSignature(err))
     }
+    #[cfg(feature = "rustcrypto")]
+    fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, JoseError> {
+        (|| -> anyhow::Result<Vec<u8>> {
+            use rsa::{traits::SignatureScheme, Pss};
+            use sha1::Sha1;
+            use sha2::{Sha256, Sha384, Sha512};
+            let mut rng = rand::rng();
+
+            let signature = match &self.algorithm.hash_algorithm() {
+                HashAlgorithm::Sha1 => {
+                    let signer = Pss::<Sha1>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, digest)?
+                }
+                HashAlgorithm::Sha256 => {
+                    let signer = Pss::<Sha256>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, digest)?
+                }
+                HashAlgorithm::Sha384 => {
+                    let signer = Pss::<Sha384>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, digest)?
+                }
+                HashAlgorithm::Sha512 => {
+                    let signer = Pss::<Sha512>::new();
+                    signer.sign(Some(&mut rng), &self.private_key, digest)?
+                }
+            };
+
+            Ok(signature)
+        })()
+        .map_err(|err| JoseError::InvalidSignature(err))
+    }
 
     fn box_clone(&self) -> Box<dyn JwsSigner> {
         Box::new(self.clone())
