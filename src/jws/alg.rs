@@ -1,9 +1,11 @@
 use anyhow::bail;
-use kapun_crypto_provider::KapunCryptoProvider;
+use kapun_crypto_provider::{
+    oid_registry::OID_PKCS1_SHA1WITHRSA, DecodingError, KapunCryptoProvider,
+};
 
 use crate::{
     jwk::{Jwk, KeyPair},
-    jws::{JwsSigner, JwsVerifier},
+    jws::{alg::rsassa::RsassaJwsAlgorithm::Rs1, JwsSigner, JwsVerifier},
 };
 
 pub mod ecdsa;
@@ -262,14 +264,35 @@ impl TryFrom<&[u8]> for Box<dyn KeyPair> {
 
 pub struct JosekitCryptoProvider;
 impl KapunCryptoProvider for JosekitCryptoProvider {
-    fn verifier(key_data: Vec<u8>) -> Box<dyn kapun_crypto_provider::Verifier> {
-        let jws_verifier: Box<dyn JwsVerifier> = key_data.as_slice().try_into().unwrap();
-        jws_verifier
+    fn verifier(
+        key_data: Vec<u8>,
+    ) -> Result<Box<dyn kapun_crypto_provider::Verifier>, DecodingError> {
+        let jws_verifier: Box<dyn JwsVerifier> = key_data
+            .as_slice()
+            .try_into()
+            .map_err(|_| DecodingError::InvalidAlgorithm)?;
+        Ok(jws_verifier)
+    }
+    fn verifier_for_oid<'a>(
+        key_data: Vec<u8>,
+        oid: kapun_crypto_provider::oid_registry::Oid<'a>,
+    ) -> Result<Box<dyn kapun_crypto_provider::Verifier + 'a>, DecodingError> {
+        if oid == OID_PKCS1_SHA1WITHRSA {
+            Ok(Box::new(
+                Rs1.verifier_from_der(key_data)
+                    .map_err(|_| DecodingError::InvalidAlgorithm)?,
+            ))
+        } else {
+            Self::verifier(key_data)
+        }
     }
 
-    fn signer(key_data: Vec<u8>) -> Box<dyn kapun_crypto_provider::Signer> {
-        let jws_signer: Box<dyn JwsSigner> = key_data.as_slice().try_into().unwrap();
-        jws_signer
+    fn signer(key_data: Vec<u8>) -> Result<Box<dyn kapun_crypto_provider::Signer>, DecodingError> {
+        let jws_signer: Box<dyn JwsSigner> = key_data
+            .as_slice()
+            .try_into()
+            .map_err(|_| DecodingError::InvalidAlgorithm)?;
+        Ok(jws_signer)
     }
 }
 

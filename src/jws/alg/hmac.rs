@@ -429,13 +429,13 @@ impl Deref for HmacJwsVerifier {
 impl KeyEncoding for HmacJwsSigner {}
 impl Metadata for HmacJwsSigner {}
 impl Signing for HmacJwsSigner {
-    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+    fn kapun_sign(&self, _data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
         todo!()
     }
 
     fn kapun_sign_hash(
         &self,
-        hash: Vec<u8>,
+        _hash: Vec<u8>,
     ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
         todo!()
     }
@@ -447,16 +447,16 @@ impl Metadata for HmacJwsVerifier {}
 impl Verifying for HmacJwsVerifier {
     fn kapun_verify(
         &self,
-        data: Vec<u8>,
-        signature: Vec<u8>,
+        _data: Vec<u8>,
+        _signature: Vec<u8>,
     ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
         todo!()
     }
 
     fn kapun_verify_hash(
         &self,
-        hash: Vec<u8>,
-        signature: Vec<u8>,
+        _hash: Vec<u8>,
+        _signature: Vec<u8>,
     ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
         todo!()
     }

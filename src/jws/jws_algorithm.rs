@@ -1,6 +1,6 @@
 use std::{any::Any, fmt::Debug};
 
-use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Verifier, Verifying};
+use kapun_crypto_provider::{Signer, Verifier};
 
 use crate::JoseError;
 
