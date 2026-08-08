@@ -22,6 +22,9 @@ use crate::{JoseError, Value};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum RsassaJwsAlgorithm {
+    #[cfg(feature = "rsa-sha1")]
+    /// NOTE: Not official!! RSASSA-PKCS1-v1_5 using SHA-1
+    Rs1,
     /// RSASSA-PKCS1-v1_5 using SHA-256
     Rs256,
 
@@ -39,6 +42,7 @@ impl RsassaJwsAlgorithm {
     /// * `bits` - RSA key length
     pub fn generate_key_pair(&self, bits: u32) -> Result<RsaKeyPair, JoseError> {
         (|| -> anyhow::Result<RsaKeyPair> {
+            #[cfg(not(feature = "rsa-sha1"))]
             if bits < 2048 {
                 bail!("key length must be 2048 or more.");
             }
@@ -61,6 +65,7 @@ impl RsassaJwsAlgorithm {
         (|| -> anyhow::Result<RsaKeyPair> {
             let mut key_pair = RsaKeyPair::from_der(input)?;
 
+            #[cfg(not(feature = "rsa-sha1"))]
             if key_pair.key_len() * 8 < 2048 {
                 bail!("key length must be 2048 or more.");
             }
@@ -88,6 +93,7 @@ impl RsassaJwsAlgorithm {
         (|| -> anyhow::Result<RsaKeyPair> {
             let mut key_pair = RsaKeyPair::from_pem(input.as_ref())?;
 
+            #[cfg(not(feature = "rsa-sha1"))]
             if key_pair.key_len() * 8 < 2048 {
                 bail!("key length must be 2048 or more.");
             }
@@ -154,6 +160,7 @@ impl RsassaJwsAlgorithm {
             }
 
             let key_pair = RsaKeyPair::from_jwk(jwk)?;
+            #[cfg(not(feature = "rsa-sha1"))]
             if key_pair.key_len() * 8 < 2048 {
                 bail!("key length must be 2048 or more.");
             }
@@ -200,6 +207,7 @@ impl RsassaJwsAlgorithm {
                 }
             }
             #[cfg(feature = "rustcrypto")]
+            #[cfg(not(feature = "rsa-sha1"))]
             {
                 use rsa::traits::PublicKeyParts;
                 if public_key.size() * 8 < 2048 {
@@ -258,6 +266,7 @@ impl RsassaJwsAlgorithm {
                 }
             }
             #[cfg(feature = "rustcrypto")]
+            #[cfg(not(feature = "rsa-sha1"))]
             {
                 use rsa::traits::PublicKeyParts;
                 if public_key.size() * 8 < 2048 {
@@ -330,6 +339,7 @@ impl RsassaJwsAlgorithm {
                 }
             }
             #[cfg(feature = "rustcrypto")]
+            #[cfg(not(feature = "rsa-sha1"))]
             {
                 use rsa::traits::PublicKeyParts;
                 if public_key.size() * 8 < 2048 {
@@ -349,6 +359,8 @@ impl RsassaJwsAlgorithm {
 
     fn hash_algorithm(&self) -> HashAlgorithm {
         match self {
+            #[cfg(feature = "rsa-sha1")]
+            Self::Rs1 => HashAlgorithm::Sha1,
             Self::Rs256 => HashAlgorithm::Sha256,
             Self::Rs384 => HashAlgorithm::Sha384,
             Self::Rs512 => HashAlgorithm::Sha512,
@@ -359,6 +371,8 @@ impl RsassaJwsAlgorithm {
 impl JwsAlgorithm for RsassaJwsAlgorithm {
     fn name(&self) -> &str {
         match self {
+            #[cfg(feature = "rsa-sha1")]
+            Self::Rs1 => "RS1",
             Self::Rs256 => "RS256",
             Self::Rs384 => "RS384",
             Self::Rs512 => "RS512",

@@ -14,7 +14,9 @@ edition = "2021"
 
 [features]
 # default = ["openssl", "pqc"]
-default = ["rustcrypto", "pqc"]
+legacy-crypto = ["rsa-sha1"]
+rsa-sha1 = []
+default = ["rustcrypto", "pqc", "legacy-crypto"]
 vendored = ["openssl/vendored"]
 rustcrypto = [
     "aes",
