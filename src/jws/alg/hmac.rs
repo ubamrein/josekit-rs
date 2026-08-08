@@ -1,7 +1,9 @@
 use std::fmt::Display;
+
 use std::ops::Deref;
 
 use anyhow::bail;
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
 #[cfg(feature = "openssl")]
@@ -423,6 +425,45 @@ impl Deref for HmacJwsVerifier {
         self
     }
 }
+
+impl KeyEncoding for HmacJwsSigner {}
+impl Metadata for HmacJwsSigner {}
+impl Signing for HmacJwsSigner {
+    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        todo!()
+    }
+
+    fn kapun_sign_hash(
+        &self,
+        hash: Vec<u8>,
+    ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        todo!()
+    }
+}
+
+impl KeyEncoding for HmacJwsVerifier {}
+impl Metadata for HmacJwsVerifier {}
+
+impl Verifying for HmacJwsVerifier {
+    fn kapun_verify(
+        &self,
+        data: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        todo!()
+    }
+
+    fn kapun_verify_hash(
+        &self,
+        hash: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        todo!()
+    }
+}
+
+impl Verifier for HmacJwsVerifier {}
+impl Signer for HmacJwsSigner {}
 
 #[cfg(test)]
 mod tests {

@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use anyhow::bail;
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::JoseError;
@@ -46,6 +47,21 @@ impl Deref for UnsecuredJwsAlgorithm {
 pub struct UnsecuredJwsSigner {
     algorithm: UnsecuredJwsAlgorithm,
 }
+impl KeyEncoding for UnsecuredJwsSigner {}
+impl Metadata for UnsecuredJwsSigner {}
+impl Signing for UnsecuredJwsSigner {
+    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        todo!()
+    }
+
+    fn kapun_sign_hash(
+        &self,
+        hash: Vec<u8>,
+    ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        todo!()
+    }
+}
+impl Signer for UnsecuredJwsSigner {}
 
 impl JwsSigner for UnsecuredJwsSigner {
     fn algorithm(&self) -> &dyn JwsAlgorithm {
@@ -81,6 +97,26 @@ impl Deref for UnsecuredJwsSigner {
 pub struct UnsecuredJwsVerifier {
     algorithm: UnsecuredJwsAlgorithm,
 }
+impl KeyEncoding for UnsecuredJwsVerifier {}
+impl Metadata for UnsecuredJwsVerifier {}
+impl Verifying for UnsecuredJwsVerifier {
+    fn kapun_verify(
+        &self,
+        data: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        todo!()
+    }
+
+    fn kapun_verify_hash(
+        &self,
+        hash: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        todo!()
+    }
+}
+impl Verifier for UnsecuredJwsVerifier {}
 
 impl JwsVerifier for UnsecuredJwsVerifier {
     fn algorithm(&self) -> &dyn JwsAlgorithm {

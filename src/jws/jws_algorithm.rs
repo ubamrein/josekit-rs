@@ -1,4 +1,6 @@
-use std::fmt::Debug;
+use std::{any::Any, fmt::Debug};
+
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Verifier, Verifying};
 
 use crate::JoseError;
 
@@ -23,7 +25,7 @@ impl Clone for Box<dyn JwsAlgorithm> {
     }
 }
 
-pub trait JwsSigner: Debug + Send + Sync {
+pub trait JwsSigner: Signer + Debug + Send + Sync + Any {
     /// Return the source algorithm instance.
     fn algorithm(&self) -> &dyn JwsAlgorithm;
 
@@ -61,7 +63,7 @@ impl Clone for Box<dyn JwsSigner> {
     }
 }
 
-pub trait JwsVerifier: Debug + Send + Sync {
+pub trait JwsVerifier: Verifier + Debug + Send + Sync {
     /// Return the source algrithm instance.
     fn algorithm(&self) -> &dyn JwsAlgorithm;
 

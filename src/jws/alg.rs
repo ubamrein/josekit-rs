@@ -1,4 +1,5 @@
 use anyhow::bail;
+use kapun_crypto_provider::{KapunCryptoProvider, Metadata, Signing};
 
 use crate::{
     jwk::{Jwk, KeyPair},
@@ -228,12 +229,26 @@ impl TryFrom<&[u8]> for Box<dyn KeyPair> {
     }
 }
 
+pub struct JosekitCryptoProvider;
+impl KapunCryptoProvider for JosekitCryptoProvider {
+    fn verifier(key_data: Vec<u8>) -> Box<dyn kapun_crypto_provider::Verifier> {
+        let jws_verifier: Box<dyn JwsVerifier> = key_data.as_slice().try_into().unwrap();
+        jws_verifier
+    }
+
+    fn signer(key_data: Vec<u8>) -> Box<dyn kapun_crypto_provider::Signer> {
+        let jws_signer: Box<dyn JwsSigner> = key_data.as_slice().try_into().unwrap();
+        jws_signer
+    }
+}
+
 #[macro_export]
 macro_rules! kapun_signing_provider {
     ($alg:ty) => {
         use kapun_crypto_provider::{
-            KeyEncoding, Metadata, Signing, VerificationProblem, Verifying,
+            KeyEncoding, Metadata, Signer, Signing, VerificationProblem, Verifier, Verifying,
         };
+        impl Signer for $alg {}
         impl Signing for $alg {
             fn kapun_sign(
                 &self,
@@ -295,6 +310,7 @@ macro_rules! kapun_signing_provider {
 #[macro_export]
 macro_rules! kapun_verifying_provider {
     ($alg:ty) => {
+        impl Verifier for $alg {}
         impl Verifying for $alg {
             fn kapun_verify(
                 &self,

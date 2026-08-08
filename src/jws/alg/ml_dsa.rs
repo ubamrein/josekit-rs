@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
-use kapun_crypto_provider::{KeyEncoding, Metadata, Signing, Verifying};
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 
 use crate::jwk::alg::ml_dsa::PrivateKey;
 use crate::jwk::alg::ml_dsa::{MlDsa, MlDsaKeyPair, PublicKey};
@@ -425,6 +425,9 @@ impl JwsVerifier for MldsaJwsVerifier {
         Box::new(self.clone())
     }
 }
+
+impl Signer for MldsaJwsSigner {}
+impl Verifier for MldsaJwsVerifier {}
 
 impl Deref for MldsaJwsVerifier {
     type Target = dyn JwsVerifier;

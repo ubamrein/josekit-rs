@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
-use kapun_crypto_provider::{KeyEncoding, Metadata, Signing, Verifying};
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
 #[cfg(feature = "openssl")]
@@ -490,6 +490,9 @@ impl JwsSigner for RsassaJwsSigner {
         Box::new(self.clone())
     }
 }
+
+impl Signer for RsassaJwsSigner {}
+impl Verifier for RsassaJwsVerifier {}
 
 impl Deref for RsassaJwsSigner {
     type Target = dyn JwsSigner;

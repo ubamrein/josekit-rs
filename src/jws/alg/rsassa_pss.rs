@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
-use kapun_crypto_provider::{KeyEncoding, Metadata, Signing, Verifying};
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
 #[cfg(feature = "openssl")]
@@ -870,6 +870,9 @@ impl Metadata for RsassaPssJwsVerifier {
         Some(self.algorithm.name().to_string())
     }
 }
+
+impl Signer for RsassaPssJwsSigner {}
+impl Verifier for RsassaPssJwsVerifier {}
 
 #[cfg(test)]
 mod tests {
