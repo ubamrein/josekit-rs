@@ -25,7 +25,13 @@ impl TryFrom<&[u8]> for Box<dyn JwsVerifier> {
             };
             return Ok(Box::new(verifier));
         }
-        for alg in [crate::jws::RS256, crate::jws::RS384, crate::jws::RS512] {
+        for alg in [
+            crate::jws::RS256,
+            crate::jws::RS384,
+            crate::jws::RS512,
+            #[cfg(feature = "rsa-sha1")]
+            crate::jws::RS1,
+        ] {
             let Ok(verifier) = alg.verifier_from_der(der) else {
                 continue;
             };
@@ -68,7 +74,13 @@ impl TryFrom<&[u8]> for Box<dyn JwsSigner> {
             };
             return Ok(Box::new(signer));
         }
-        for alg in [crate::jws::RS256, crate::jws::RS384, crate::jws::RS512] {
+        for alg in [
+            crate::jws::RS256,
+            crate::jws::RS384,
+            crate::jws::RS512,
+            #[cfg(feature = "rsa-sha1")]
+            crate::jws::RS1,
+        ] {
             let Ok(signer) = alg.signer_from_der(der) else {
                 continue;
             };
@@ -111,7 +123,13 @@ impl TryFrom<&str> for Box<dyn JwsVerifier> {
             };
             return Ok(Box::new(verifier));
         }
-        for alg in [crate::jws::RS256, crate::jws::RS384, crate::jws::RS512] {
+        for alg in [
+            crate::jws::RS256,
+            crate::jws::RS384,
+            crate::jws::RS512,
+            #[cfg(feature = "rsa-sha1")]
+            crate::jws::RS1,
+        ] {
             let Ok(verifier) = alg.verifier_from_jwk(&jwk) else {
                 continue;
             };
@@ -154,7 +172,13 @@ impl TryFrom<&str> for Box<dyn JwsSigner> {
             };
             return Ok(Box::new(signer));
         }
-        for alg in [crate::jws::RS256, crate::jws::RS384, crate::jws::RS512] {
+        for alg in [
+            crate::jws::RS256,
+            crate::jws::RS384,
+            crate::jws::RS512,
+            #[cfg(feature = "rsa-sha1")]
+            crate::jws::RS1,
+        ] {
             let Ok(signer) = alg.signer_from_jwk(&jwk) else {
                 continue;
             };
@@ -197,7 +221,14 @@ impl TryFrom<&[u8]> for Box<dyn KeyPair> {
             };
             return Ok(Box::new(key_pair));
         }
-        for alg in [crate::jws::RS256, crate::jws::RS384, crate::jws::RS512] {
+
+        for alg in [
+            crate::jws::RS256,
+            crate::jws::RS384,
+            crate::jws::RS512,
+            #[cfg(feature = "rsa-sha1")]
+            crate::jws::RS1,
+        ] {
             let Ok(key_pair) = alg.key_pair_from_der(der) else {
                 continue;
             };
