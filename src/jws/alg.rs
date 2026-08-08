@@ -3,9 +3,11 @@ use kapun_crypto_provider::{
     oid_registry::OID_PKCS1_SHA1WITHRSA, DecodingError, KapunCryptoProvider,
 };
 
+#[cfg(feature = "rsa-sha1")]
+use crate::jws::alg::rsassa::RsassaJwsAlgorithm::Rs1;
 use crate::{
     jwk::{Jwk, KeyPair},
-    jws::{alg::rsassa::RsassaJwsAlgorithm::Rs1, JwsSigner, JwsVerifier},
+    jws::{JwsSigner, JwsVerifier},
 };
 
 pub mod ecdsa;
@@ -283,10 +285,15 @@ impl KapunCryptoProvider for JosekitCryptoProvider {
         oid: kapun_crypto_provider::oid_registry::Oid<'a>,
     ) -> Result<Box<dyn kapun_crypto_provider::Verifier + 'a>, DecodingError> {
         if oid == OID_PKCS1_SHA1WITHRSA {
-            Ok(Box::new(
-                Rs1.verifier_from_der(key_data)
-                    .map_err(|_| DecodingError::InvalidAlgorithm)?,
-            ))
+            #[cfg(feature = "rsa-sha1")]
+            {
+                return Ok(Box::new(
+                    Rs1.verifier_from_der(key_data)
+                        .map_err(|_| DecodingError::InvalidAlgorithm)?,
+                ));
+            }
+            #[cfg(not(feature = "rsa-sha1"))]
+            Err(DecodingError::InvalidAlgorithm)
         } else {
             Self::verifier(key_data)
         }
