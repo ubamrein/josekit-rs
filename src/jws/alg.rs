@@ -51,6 +51,7 @@ impl TryFrom<&[u8]> for Box<dyn JwsVerifier> {
             };
             return Ok(Box::new(verifier));
         }
+        #[cfg(feature = "pqc")]
         for alg in [
             crate::jws::MlDSA44,
             crate::jws::MlDSA65,
@@ -100,6 +101,7 @@ impl TryFrom<&[u8]> for Box<dyn JwsSigner> {
             };
             return Ok(Box::new(signer));
         }
+        #[cfg(feature = "pqc")]
         for alg in [
             crate::jws::MlDSA44,
             crate::jws::MlDSA65,
@@ -149,6 +151,7 @@ impl TryFrom<&str> for Box<dyn JwsVerifier> {
             };
             return Ok(Box::new(verifier));
         }
+        #[cfg(feature = "pqc")]
         for alg in [
             crate::jws::MlDSA44,
             crate::jws::MlDSA65,
@@ -198,6 +201,7 @@ impl TryFrom<&str> for Box<dyn JwsSigner> {
             };
             return Ok(Box::new(signer));
         }
+        #[cfg(feature = "pqc")]
         for alg in [
             crate::jws::MlDSA44,
             crate::jws::MlDSA65,
@@ -248,6 +252,7 @@ impl TryFrom<&[u8]> for Box<dyn KeyPair> {
             };
             return Ok(Box::new(key_pair));
         }
+        #[cfg(feature = "pqc")]
         for alg in [
             crate::jws::MlDSA44,
             crate::jws::MlDSA65,
