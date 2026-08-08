@@ -14,7 +14,7 @@ use crate::jwk::{
     Jwk,
 };
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
-use crate::util;
+use crate::{kapun_signing_provider, kapun_verifying_provider, util};
 use crate::{JoseError, Value};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -428,6 +428,9 @@ impl Deref for EddsaJwsVerifier {
         self
     }
 }
+
+kapun_verifying_provider!(EddsaJwsVerifier);
+kapun_signing_provider!(EddsaJwsSigner);
 
 #[cfg(test)]
 mod tests {

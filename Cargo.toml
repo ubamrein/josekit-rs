@@ -13,8 +13,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["openssl", "pqc"]
-# default = ["rustcrypto", "pqc"]
+# default = ["openssl", "pqc"]
+default = ["rustcrypto", "pqc"]
 vendored = ["openssl/vendored"]
 rustcrypto = [
     "aes",
@@ -40,6 +40,7 @@ pqc = ["dep:ml-dsa", "rand", "pem", "dep:base64ct"]
 pem = ["dep:pem"]
 
 [dependencies]
+kapun-crypto-provider = { git = "https://github.com/heidiverse/kapun-sdk.git", branch = "feature/crypto-provider" }
 ml-dsa = {version = "0.1.1", features = ["pkcs8"], optional = true}
 x25519-dalek = { version = "2.0.1", features = [
     "static_secrets",

@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signing, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
 #[cfg(feature = "openssl")]
@@ -10,6 +11,7 @@ use openssl::pkey::{PKey, Private, Public};
 use openssl::rsa::Rsa;
 #[cfg(feature = "openssl")]
 use openssl::sign::{Signer, Verifier};
+use pkcs8::EncodePrivateKey;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs1::DecodeRsaPublicKey;
 #[cfg(feature = "rustcrypto")]
@@ -18,6 +20,7 @@ use rsa::pkcs8::der::Decode;
 use rsa::pkcs8::DecodePublicKey;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::SubjectPublicKeyInfoRef;
+use spki::EncodePublicKey;
 
 use crate::jwk::{alg::rsa::RsaKeyPair, alg::rsapss::RsaPssKeyPair, Jwk};
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
@@ -772,6 +775,99 @@ impl Deref for RsassaPssJwsVerifier {
 
     fn deref(&self) -> &Self::Target {
         self
+    }
+}
+
+impl KeyEncoding for RsassaPssJwsSigner {
+    fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
+        Some(self.private_key.to_pkcs8_der().ok()?.to_bytes().to_vec())
+    }
+
+    fn kapun_private_pkcs8_pem(&self) -> Option<String> {
+        Some(
+            self.private_key
+                .to_pkcs8_pem(pkcs8::LineEnding::CRLF)
+                .ok()?
+                .to_string(),
+        )
+    }
+
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+        Some(
+            self.private_key
+                .as_public_key()
+                .to_public_key_der()
+                .ok()?
+                .to_vec(),
+        )
+    }
+
+    fn kapun_public_spki_pem(&self) -> Option<String> {
+        Some(
+            self.private_key
+                .as_public_key()
+                .to_public_key_pem(pkcs8::LineEnding::CRLF)
+                .ok()?,
+        )
+    }
+}
+impl KeyEncoding for RsassaPssJwsVerifier {
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+        Some(self.public_key.to_public_key_der().ok()?.to_vec())
+    }
+
+    fn kapun_public_spki_pem(&self) -> Option<String> {
+        Some(
+            self.public_key
+                .to_public_key_pem(pkcs8::LineEnding::CRLF)
+                .ok()?,
+        )
+    }
+}
+
+impl Signing for RsassaPssJwsSigner {
+    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        self.sign(&data)
+            .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+    }
+
+    fn kapun_sign_hash(
+        &self,
+        hash: Vec<u8>,
+    ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        self.sign_prehashed(&hash)
+            .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+    }
+}
+
+impl Verifying for RsassaPssJwsVerifier {
+    fn kapun_verify(
+        &self,
+        data: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        self.verify(&data, &signature)
+            .map_err(|_| kapun_crypto_provider::VerificationProblem::SignatureInvalid)
+    }
+    // TODO: we should use a prehashed version here
+    fn kapun_verify_hash(
+        &self,
+        hash: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        self.verify_prehashed(&hash, &signature)
+            .map_err(|_| kapun_crypto_provider::VerificationProblem::SignatureInvalid)
+    }
+}
+
+impl Metadata for RsassaPssJwsSigner {
+    fn kapun_jose_alg(&self) -> Option<String> {
+        Some(self.algorithm.name().to_string())
+    }
+}
+impl Metadata for RsassaPssJwsVerifier {
+    fn kapun_jose_alg(&self) -> Option<String> {
+        Some(self.algorithm.name().to_string())
     }
 }
 

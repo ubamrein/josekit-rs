@@ -231,6 +231,7 @@ impl PrivateKey {
                 .to_vec(),
         })
     }
+
     pub fn to_pem_private_key(&self) -> Vec<u8> {
         match self {
             PrivateKey::MlDsa44(signing_key) => signing_key

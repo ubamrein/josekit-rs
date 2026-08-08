@@ -228,6 +228,121 @@ impl TryFrom<&[u8]> for Box<dyn KeyPair> {
     }
 }
 
+#[macro_export]
+macro_rules! kapun_signing_provider {
+    ($alg:ty) => {
+        use kapun_crypto_provider::{
+            KeyEncoding, Metadata, Signing, VerificationProblem, Verifying,
+        };
+        impl Signing for $alg {
+            fn kapun_sign(
+                &self,
+                data: Vec<u8>,
+            ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+                JwsSigner::sign(&*self, &data)
+                    .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+            }
+
+            fn kapun_sign_hash(
+                &self,
+                hash: Vec<u8>,
+            ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+                JwsSigner::sign_prehashed(&*self, &hash)
+                    .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+            }
+        }
+        impl KeyEncoding for $alg {
+            fn kapun_private_jwk(&self) -> Option<String> {
+                self.private_key.ec_key_jwk().ok()
+            }
+
+            fn kapun_public_jwk(&self) -> Option<String> {
+                self.private_key.public_key().ec_key_jwk().ok()
+            }
+
+            fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
+                self.private_key.ec_key_der().ok()
+            }
+
+            fn kapun_private_pkcs8_pem(&self) -> Option<String> {
+                self.private_key.ec_key_pem().ok()
+            }
+
+            fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+                self.private_key.public_key().ec_key_der().ok()
+            }
+
+            fn kapun_public_spki_pem(&self) -> Option<String> {
+                self.private_key.public_key().ec_key_pem().ok()
+            }
+        }
+        impl Metadata for $alg {
+            fn kapun_jose_alg(&self) -> Option<String> {
+                Some(self.algorithm.name().to_string())
+            }
+
+            fn kapun_oid(&self) -> Option<Vec<u8>> {
+                None
+            }
+
+            fn kapun_additional(&self) -> Option<kapun_crypto_provider::KapunValue> {
+                None
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! kapun_verifying_provider {
+    ($alg:ty) => {
+        impl Verifying for $alg {
+            fn kapun_verify(
+                &self,
+                data: Vec<u8>,
+                signature: Vec<u8>,
+            ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+                self.verify(&data, &signature)
+                    .map_err(|_| VerificationProblem::SignatureInvalid)
+            }
+
+            fn kapun_verify_hash(
+                &self,
+                hash: Vec<u8>,
+                signature: Vec<u8>,
+            ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+                self.verify_prehashed(&hash, &signature)
+                    .map_err(|_| VerificationProblem::SignatureInvalid)
+            }
+        }
+        impl KeyEncoding for $alg {
+            fn kapun_public_jwk(&self) -> Option<String> {
+                self.public_key.ec_key_jwk().ok()
+            }
+
+            fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+                self.public_key.ec_key_der().ok()
+            }
+
+            fn kapun_public_spki_pem(&self) -> Option<String> {
+                self.public_key.ec_key_pem().ok()
+            }
+        }
+        impl Metadata for $alg {
+            fn kapun_jose_alg(&self) -> Option<String> {
+                Some(self.algorithm.name().to_string())
+            }
+
+            fn kapun_oid(&self) -> Option<Vec<u8>> {
+                None
+            }
+
+            fn kapun_additional(&self) -> Option<kapun_crypto_provider::KapunValue> {
+                None
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{

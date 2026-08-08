@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signing, Verifying};
 
 use crate::jwk::alg::ml_dsa::PrivateKey;
 use crate::jwk::alg::ml_dsa::{MlDsa, MlDsaKeyPair, PublicKey};
@@ -301,6 +302,79 @@ impl Deref for MldsaJwsSigner {
 
     fn deref(&self) -> &Self::Target {
         self
+    }
+}
+
+impl KeyEncoding for MldsaJwsSigner {
+    fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
+        self.private_key.to_der_private_key().ok()
+    }
+
+    fn kapun_private_pkcs8_pem(&self) -> Option<String> {
+        String::from_utf8(self.private_key.to_pem_private_key()).ok()
+    }
+
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+        self.private_key.public_key().to_der().ok()
+    }
+
+    fn kapun_public_spki_pem(&self) -> Option<String> {
+        self.private_key.public_key().to_pem().ok()
+    }
+}
+impl KeyEncoding for MldsaJwsVerifier {
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+        self.public_key.to_der().ok()
+    }
+
+    fn kapun_public_spki_pem(&self) -> Option<String> {
+        self.public_key.to_pem().ok()
+    }
+}
+
+impl Signing for MldsaJwsSigner {
+    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        self.sign(&data)
+            .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+    }
+
+    fn kapun_sign_hash(
+        &self,
+        hash: Vec<u8>,
+    ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        self.sign_prehashed(&hash)
+            .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+    }
+}
+
+impl Verifying for MldsaJwsVerifier {
+    fn kapun_verify(
+        &self,
+        data: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        self.verify(&data, &signature)
+            .map_err(|_| kapun_crypto_provider::VerificationProblem::SignatureInvalid)
+    }
+
+    fn kapun_verify_hash(
+        &self,
+        hash: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        self.verify_prehashed(&hash, &signature)
+            .map_err(|_| kapun_crypto_provider::VerificationProblem::SignatureInvalid)
+    }
+}
+
+impl Metadata for MldsaJwsSigner {
+    fn kapun_jose_alg(&self) -> Option<String> {
+        Some(self.algorithm.name().to_string())
+    }
+}
+impl Metadata for MldsaJwsVerifier {
+    fn kapun_jose_alg(&self) -> Option<String> {
+        Some(self.algorithm.name().to_string())
     }
 }
 

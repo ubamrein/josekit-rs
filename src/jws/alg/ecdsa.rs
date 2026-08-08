@@ -20,7 +20,7 @@ use crate::jwk::{
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::util::der::{DerBuilder, DerReader, DerType};
 use crate::util::{self, HashAlgorithm};
-use crate::{JoseError, Value};
+use crate::{kapun_signing_provider, kapun_verifying_provider, JoseError, Value};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EcdsaJwsAlgorithm {
@@ -549,6 +549,9 @@ impl Deref for EcdsaJwsVerifier {
     }
 }
 
+kapun_verifying_provider!(EcdsaJwsVerifier);
+kapun_signing_provider!(EcdsaJwsSigner);
+
 #[cfg(test)]
 mod tests {
     use crate::jws::alg::ecdsa::EcdsaJwsAlgorithm::Es256;
@@ -556,6 +559,7 @@ mod tests {
     use super::*;
 
     use anyhow::Result;
+    #[cfg(feature = "rustcrypto")]
     use k256::sha2::{Digest, Sha256};
     use std::fs;
     use std::path::PathBuf;
