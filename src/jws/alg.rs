@@ -1,5 +1,5 @@
 use anyhow::bail;
-use kapun_crypto_provider::{KapunCryptoProvider, Metadata, Signing};
+use kapun_crypto_provider::KapunCryptoProvider;
 
 use crate::{
     jwk::{Jwk, KeyPair},
