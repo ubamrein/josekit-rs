@@ -647,19 +647,19 @@ impl PrivateKey {
             EcdhEsKeyType::Ec(ec_curve) => match ec_curve {
                 EcCurve::P256 => {
                     use p256::pkcs8::DecodePrivateKey;
-                    PrivateKey::P256(p256::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::P256(p256::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
                 EcCurve::P384 => {
                     use p384::pkcs8::DecodePrivateKey;
-                    PrivateKey::P384(p384::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::P384(p384::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
                 EcCurve::P521 => {
                     use p521::pkcs8::DecodePrivateKey;
-                    PrivateKey::P521(p521::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::P521(p521::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
                 EcCurve::Secp256k1 => {
                     use k256::pkcs8::DecodePrivateKey;
-                    PrivateKey::K256(k256::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::K256(k256::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
             },
             EcdhEsKeyType::Ecx(ecx_curve) => match ecx_curve {

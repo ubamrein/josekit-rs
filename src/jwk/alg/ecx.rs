@@ -267,6 +267,12 @@ impl EcxKeyPair {
     fn to_jwk(&self, private: bool, public: bool) -> Jwk {
         let mut jwk = Jwk::new("OKP");
         jwk.set_key_use("enc");
+        if let Some(val) = &self.algorithm {
+            jwk.set_algorithm(val);
+        }
+        if let Some(val) = &self.key_id {
+            jwk.set_key_id(val);
+        }
         jwk.set_parameter("crv", Some(Value::String(self.curve.name().to_string())))
             .unwrap();
 
@@ -548,6 +554,23 @@ mod tests {
             assert_eq!(der_private1, der_private2);
             assert_eq!(der_public1, der_public2);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ecx_jwk_serializes_key_id() -> Result<()> {
+        let mut key_pair_1 = EcxKeyPair::generate(EcxCurve::X25519)?;
+        key_pair_1.set_key_id(Some("issuer-key"));
+
+        assert_eq!(key_pair_1.to_jwk_public_key().key_id(), Some("issuer-key"));
+        assert_eq!(key_pair_1.to_jwk_private_key().key_id(), Some("issuer-key"));
+        assert_eq!(key_pair_1.to_jwk_key_pair().key_id(), Some("issuer-key"));
+
+        let key_pair_2 = EcxKeyPair::from_jwk(&key_pair_1.to_jwk_key_pair())?;
+
+        assert_eq!(key_pair_2.key_id(), Some("issuer-key"));
+        assert_eq!(key_pair_2.to_jwk_public_key().key_id(), Some("issuer-key"));
 
         Ok(())
     }

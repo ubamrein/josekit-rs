@@ -677,4 +677,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_ec_from_raw_private_key() -> Result<()> {
+        let key_pair_1 = EcKeyPair::generate(EcCurve::P256)?;
+        let raw_private_key = key_pair_1.to_raw_private_key();
+
+        let key_pair_2 = EcKeyPair::from_der(raw_private_key, Some(EcCurve::P256))?;
+
+        assert_eq!(
+            key_pair_1.to_jwk_private_key().parameter("d"),
+            key_pair_2.to_jwk_private_key().parameter("d")
+        );
+        assert_eq!(
+            key_pair_1.to_jwk_public_key().parameter("x"),
+            key_pair_2.to_jwk_public_key().parameter("x")
+        );
+        assert_eq!(
+            key_pair_1.to_jwk_public_key().parameter("y"),
+            key_pair_2.to_jwk_public_key().parameter("y")
+        );
+
+        Ok(())
+    }
 }
