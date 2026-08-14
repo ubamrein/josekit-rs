@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
 use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
@@ -9,9 +10,11 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private, Public};
 #[cfg(feature = "openssl")]
 use openssl::sign::{Signer, Verifier};
+#[cfg(feature = "kapun-provider")]
 use pkcs8::EncodePrivateKey;
 #[cfg(feature = "rustcrypto")]
 use rsa::pkcs8::DecodePublicKey;
+#[cfg(feature = "kapun-provider")]
 use spki::EncodePublicKey;
 
 use crate::jwk::{alg::rsa::RsaKeyPair, Jwk};
@@ -505,7 +508,9 @@ impl JwsSigner for RsassaJwsSigner {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Signer for RsassaJwsSigner {}
+#[cfg(feature = "kapun-provider")]
 impl Verifier for RsassaJwsVerifier {}
 
 impl Deref for RsassaJwsSigner {
@@ -604,6 +609,7 @@ impl Deref for RsassaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for RsassaJwsSigner {
     fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
         Some(self.private_key.to_pkcs8_der().ok()?.to_bytes().to_vec())
@@ -637,6 +643,7 @@ impl KeyEncoding for RsassaJwsSigner {
         )
     }
 }
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for RsassaJwsVerifier {
     fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
         Some(self.public_key.to_public_key_der().ok()?.to_vec())
@@ -651,6 +658,7 @@ impl KeyEncoding for RsassaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Signing for RsassaJwsSigner {
     fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
         self.sign(&data)
@@ -666,6 +674,7 @@ impl Signing for RsassaJwsSigner {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Verifying for RsassaJwsVerifier {
     fn kapun_verify(
         &self,
@@ -686,11 +695,13 @@ impl Verifying for RsassaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Metadata for RsassaJwsSigner {
     fn kapun_jose_alg(&self) -> Option<String> {
         Some(self.algorithm.name().to_string())
     }
 }
+#[cfg(feature = "kapun-provider")]
 impl Metadata for RsassaJwsVerifier {
     fn kapun_jose_alg(&self) -> Option<String> {
         Some(self.algorithm.name().to_string())

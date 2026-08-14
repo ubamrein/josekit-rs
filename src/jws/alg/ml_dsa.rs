@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
 use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 
 use crate::jwk::alg::ml_dsa::PrivateKey;
@@ -305,6 +306,7 @@ impl Deref for MldsaJwsSigner {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for MldsaJwsSigner {
     fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
         self.private_key.to_der_private_key().ok()
@@ -322,6 +324,7 @@ impl KeyEncoding for MldsaJwsSigner {
         self.private_key.public_key().to_pem().ok()
     }
 }
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for MldsaJwsVerifier {
     fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
         self.public_key.to_der().ok()
@@ -332,6 +335,7 @@ impl KeyEncoding for MldsaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Signing for MldsaJwsSigner {
     fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
         self.sign(&data)
@@ -347,6 +351,7 @@ impl Signing for MldsaJwsSigner {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Verifying for MldsaJwsVerifier {
     fn kapun_verify(
         &self,
@@ -367,11 +372,13 @@ impl Verifying for MldsaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Metadata for MldsaJwsSigner {
     fn kapun_jose_alg(&self) -> Option<String> {
         Some(self.algorithm.name().to_string())
     }
 }
+#[cfg(feature = "kapun-provider")]
 impl Metadata for MldsaJwsVerifier {
     fn kapun_jose_alg(&self) -> Option<String> {
         Some(self.algorithm.name().to_string())
@@ -426,7 +433,9 @@ impl JwsVerifier for MldsaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Signer for MldsaJwsSigner {}
+#[cfg(feature = "kapun-provider")]
 impl Verifier for MldsaJwsVerifier {}
 
 impl Deref for MldsaJwsVerifier {

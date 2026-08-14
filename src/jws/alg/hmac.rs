@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
 use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
@@ -426,8 +427,11 @@ impl Deref for HmacJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for HmacJwsSigner {}
+#[cfg(feature = "kapun-provider")]
 impl Metadata for HmacJwsSigner {}
+#[cfg(feature = "kapun-provider")]
 impl Signing for HmacJwsSigner {
     fn kapun_sign(&self, _data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
         todo!()
@@ -441,9 +445,12 @@ impl Signing for HmacJwsSigner {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for HmacJwsVerifier {}
+#[cfg(feature = "kapun-provider")]
 impl Metadata for HmacJwsVerifier {}
 
+#[cfg(feature = "kapun-provider")]
 impl Verifying for HmacJwsVerifier {
     fn kapun_verify(
         &self,
@@ -462,7 +469,9 @@ impl Verifying for HmacJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 impl Verifier for HmacJwsVerifier {}
+#[cfg(feature = "kapun-provider")]
 impl Signer for HmacJwsSigner {}
 
 #[cfg(test)]

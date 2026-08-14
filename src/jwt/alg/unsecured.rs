@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
 use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
@@ -47,8 +48,11 @@ impl Deref for UnsecuredJwsAlgorithm {
 pub struct UnsecuredJwsSigner {
     algorithm: UnsecuredJwsAlgorithm,
 }
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for UnsecuredJwsSigner {}
+#[cfg(feature = "kapun-provider")]
 impl Metadata for UnsecuredJwsSigner {}
+#[cfg(feature = "kapun-provider")]
 impl Signing for UnsecuredJwsSigner {
     fn kapun_sign(&self, _data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
         todo!()
@@ -61,6 +65,7 @@ impl Signing for UnsecuredJwsSigner {
         todo!()
     }
 }
+#[cfg(feature = "kapun-provider")]
 impl Signer for UnsecuredJwsSigner {}
 
 impl JwsSigner for UnsecuredJwsSigner {
@@ -97,8 +102,11 @@ impl Deref for UnsecuredJwsSigner {
 pub struct UnsecuredJwsVerifier {
     algorithm: UnsecuredJwsAlgorithm,
 }
+#[cfg(feature = "kapun-provider")]
 impl KeyEncoding for UnsecuredJwsVerifier {}
+#[cfg(feature = "kapun-provider")]
 impl Metadata for UnsecuredJwsVerifier {}
+#[cfg(feature = "kapun-provider")]
 impl Verifying for UnsecuredJwsVerifier {
     fn kapun_verify(
         &self,
@@ -116,6 +124,7 @@ impl Verifying for UnsecuredJwsVerifier {
         todo!()
     }
 }
+#[cfg(feature = "kapun-provider")]
 impl Verifier for UnsecuredJwsVerifier {}
 
 impl JwsVerifier for UnsecuredJwsVerifier {

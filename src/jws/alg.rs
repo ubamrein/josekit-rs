@@ -1,4 +1,5 @@
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
 use kapun_crypto_provider::{
     oid_registry::OID_PKCS1_SHA1WITHRSA, DecodingError, KapunCryptoProvider,
 };
@@ -270,6 +271,7 @@ impl TryFrom<&[u8]> for Box<dyn KeyPair> {
 }
 
 pub struct JosekitCryptoProvider;
+#[cfg(feature = "kapun-provider")]
 impl KapunCryptoProvider for JosekitCryptoProvider {
     fn verifier(
         key_data: Vec<u8>,
@@ -311,10 +313,13 @@ impl KapunCryptoProvider for JosekitCryptoProvider {
 #[macro_export]
 macro_rules! kapun_signing_provider {
     ($alg:ty) => {
+        #[cfg(feature = "kapun-provider")]
         use kapun_crypto_provider::{
             KeyEncoding, Metadata, Signer, Signing, VerificationProblem, Verifier, Verifying,
         };
+        #[cfg(feature = "kapun-provider")]
         impl Signer for $alg {}
+        #[cfg(feature = "kapun-provider")]
         impl Signing for $alg {
             fn kapun_sign(
                 &self,
@@ -332,6 +337,7 @@ macro_rules! kapun_signing_provider {
                     .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
             }
         }
+        #[cfg(feature = "kapun-provider")]
         impl KeyEncoding for $alg {
             fn kapun_private_jwk(&self) -> Option<String> {
                 self.private_key.ec_key_jwk().ok()
@@ -357,6 +363,7 @@ macro_rules! kapun_signing_provider {
                 self.private_key.public_key().ec_key_pem().ok()
             }
         }
+        #[cfg(feature = "kapun-provider")]
         impl Metadata for $alg {
             fn kapun_jose_alg(&self) -> Option<String> {
                 Some(self.algorithm.name().to_string())
@@ -376,7 +383,13 @@ macro_rules! kapun_signing_provider {
 #[macro_export]
 macro_rules! kapun_verifying_provider {
     ($alg:ty) => {
+        #[cfg(feature = "kapun-provider")]
+        use kapun_crypto_provider::VerificationProblem;
+        #[cfg(feature = "kapun-provider")]
+        use kapun_crypto_provider::{KeyEncoding, Metadata, Verifier, Verifying};
+        #[cfg(feature = "kapun-provider")]
         impl Verifier for $alg {}
+        #[cfg(feature = "kapun-provider")]
         impl Verifying for $alg {
             fn kapun_verify(
                 &self,
@@ -396,6 +409,7 @@ macro_rules! kapun_verifying_provider {
                     .map_err(|_| VerificationProblem::SignatureInvalid)
             }
         }
+        #[cfg(feature = "kapun-provider")]
         impl KeyEncoding for $alg {
             fn kapun_public_jwk(&self) -> Option<String> {
                 self.public_key.ec_key_jwk().ok()
@@ -409,6 +423,7 @@ macro_rules! kapun_verifying_provider {
                 self.public_key.ec_key_pem().ok()
             }
         }
+        #[cfg(feature = "kapun-provider")]
         impl Metadata for $alg {
             fn kapun_jose_alg(&self) -> Option<String> {
                 Some(self.algorithm.name().to_string())

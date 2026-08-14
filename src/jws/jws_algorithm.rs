@@ -1,8 +1,21 @@
 use std::{any::Any, fmt::Debug};
 
-use kapun_crypto_provider::{Signer, Verifier};
+#[cfg(feature = "kapun-provider")]
+pub use kapun_crypto_provider::{Signer as JwsProviderSigner, Verifier as JwsProviderVerifier};
 
 use crate::JoseError;
+
+#[cfg(not(feature = "kapun-provider"))]
+pub trait JwsProviderSigner {}
+
+#[cfg(not(feature = "kapun-provider"))]
+impl<T> JwsProviderSigner for T {}
+
+#[cfg(not(feature = "kapun-provider"))]
+pub trait JwsProviderVerifier {}
+
+#[cfg(not(feature = "kapun-provider"))]
+impl<T> JwsProviderVerifier for T {}
 
 pub trait JwsAlgorithm: Debug + Send + Sync {
     /// Return the "alg" (algorithm) header parameter value of JWS.
@@ -25,7 +38,7 @@ impl Clone for Box<dyn JwsAlgorithm> {
     }
 }
 
-pub trait JwsSigner: Signer + Debug + Send + Sync + Any {
+pub trait JwsSigner: JwsProviderSigner + Debug + Send + Sync + Any {
     /// Return the source algorithm instance.
     fn algorithm(&self) -> &dyn JwsAlgorithm;
 
@@ -63,7 +76,7 @@ impl Clone for Box<dyn JwsSigner> {
     }
 }
 
-pub trait JwsVerifier: Verifier + Debug + Send + Sync {
+pub trait JwsVerifier: JwsProviderVerifier + Debug + Send + Sync {
     /// Return the source algrithm instance.
     fn algorithm(&self) -> &dyn JwsAlgorithm;
 
