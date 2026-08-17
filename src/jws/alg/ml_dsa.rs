@@ -7,7 +7,7 @@ use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Ve
 
 use crate::jwk::alg::ml_dsa::PrivateKey;
 use crate::jwk::alg::ml_dsa::{MlDsa, MlDsaKeyPair, PublicKey};
-use crate::jwk::Jwk;
+use crate::jwk::{Jwk, PublicKey as PublicKeyTrait};
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::util::{self};
 use crate::{JoseError, Value};
@@ -399,6 +399,25 @@ impl MldsaJwsVerifier {
 
     pub fn remove_key_id(&mut self) {
         self.key_id = None;
+    }
+}
+
+impl PublicKeyTrait for MldsaJwsVerifier {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_der_public_key(&self.public_key)
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_pem_public_key(&self.public_key)
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let mut jwk = PublicKeyTrait::to_jwk_public_key(&self.public_key);
+        jwk.set_algorithm(self.algorithm.name());
+        if let Some(key_id) = &self.key_id {
+            jwk.set_key_id(key_id);
+        }
+        jwk
     }
 }
 

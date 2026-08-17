@@ -12,7 +12,7 @@ use signature::DigestSigner;
 
 use crate::JoseError;
 use crate::{
-    jwk::{Jwk, KeyPair},
+    jwk::{Jwk, KeyPair, PublicKey as PublicKeyTrait},
     util::{
         self,
         oid::{ObjectIdentifier, ML_DSA_44, ML_DSA_65, ML_DSA_87},
@@ -194,6 +194,35 @@ impl PublicKey {
                 )
                 .context("Failed to verify signature"),
         }
+    }
+}
+
+impl PublicKeyTrait for PublicKey {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        self.to_der().unwrap_or_default()
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        self.to_pem().unwrap_or_default().into_bytes()
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let variant = match self {
+            PublicKey::MlDsa44(_) => MlDsa::MlDsa44,
+            PublicKey::MlDsa65(_) => MlDsa::MlDsa65,
+            PublicKey::MlDsa87(_) => MlDsa::MlDsa87,
+        };
+        let mut jwk = Jwk::new("AKP");
+        jwk.set_parameter("alg", Some(Value::String(variant.to_string())))
+            .unwrap();
+        jwk.set_parameter(
+            "pub",
+            Some(Value::String(util::encode_base64_urlsafe_nopad(
+                self.to_bytes(),
+            ))),
+        )
+        .unwrap();
+        jwk
     }
 }
 

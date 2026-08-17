@@ -33,7 +33,7 @@ use crate::jwk::alg::{
     ec::{EcCurve, EcKeyPair},
     ecx::{EcxCurve, EcxKeyPair},
 };
-use crate::jwk::Jwk;
+use crate::jwk::{Jwk, PublicKey as PublicKeyTrait};
 use crate::util;
 use crate::util::der::{DerReader, DerType};
 
@@ -162,16 +162,7 @@ impl PublicKey {
         }
     }
     pub fn ec_key_jwk(&self) -> Result<String, anyhow::Error> {
-        match self {
-            PublicKey::P256(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::P384(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::P521(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::K256(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::X25519(_key) => todo!("JWK not implemented for x25519"),
-            PublicKey::X448(_key) => todo!("JWK not implemented for x448"),
-            PublicKey::Ed25519(_key) => todo!("JWK not implemented for ed25519"),
-            PublicKey::Ed448(_key) => todo!("JWK not implemented for ed448"),
-        }
+        Ok(PublicKeyTrait::to_jwk(self).to_string())
     }
     pub fn from_pkcs8_der_with_ed_curve(
         curve: EdCurve,
@@ -352,6 +343,58 @@ impl PublicKey {
             }
             _ => self.verify_signature(message, signature),
         }
+    }
+}
+
+#[cfg(feature = "rustcrypto")]
+impl PublicKeyTrait for PublicKey {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        self.ec_key_der().unwrap()
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        self.ec_key_pem().unwrap().into_bytes()
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let (key_type, curve) = match self {
+            PublicKey::P256(_) => ("EC", "P-256"),
+            PublicKey::P384(_) => ("EC", "P-384"),
+            PublicKey::P521(_) => ("EC", "P-521"),
+            PublicKey::K256(_) => ("EC", "secp256k1"),
+            PublicKey::X25519(_) => ("OKP", "X25519"),
+            PublicKey::X448(_) => ("OKP", "X448"),
+            PublicKey::Ed25519(_) => ("OKP", "Ed25519"),
+            PublicKey::Ed448(_) => ("OKP", "Ed448"),
+        };
+
+        let mut jwk = Jwk::new(key_type);
+        jwk.set_parameter("crv", Some(Value::String(curve.to_owned())))
+            .unwrap();
+        jwk.set_parameter(
+            "x",
+            Some(Value::String(util::encode_base64_urlsafe_nopad(
+                self.ec_key_x(),
+            ))),
+        )
+        .unwrap();
+
+        if matches!(
+            self,
+            PublicKey::P256(_) | PublicKey::P384(_) | PublicKey::P521(_) | PublicKey::K256(_)
+        ) {
+            jwk.set_parameter(
+                "y",
+                Some(Value::String(util::encode_base64_urlsafe_nopad(
+                    self.ec_key_y(),
+                ))),
+            )
+            .unwrap();
+        }
+        if matches!(self, PublicKey::Ed25519(_) | PublicKey::Ed448(_)) {
+            jwk.set_key_use("sig");
+        }
+        jwk
     }
 }
 #[cfg(feature = "rustcrypto")]

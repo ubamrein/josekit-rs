@@ -17,7 +17,7 @@ use rsa::pkcs8::DecodePublicKey;
 #[cfg(feature = "kapun-provider")]
 use spki::EncodePublicKey;
 
-use crate::jwk::{alg::rsa::RsaKeyPair, Jwk};
+use crate::jwk::{alg::rsa::RsaKeyPair, Jwk, PublicKey as PublicKeyTrait};
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::util::der::{DerBuilder, DerType};
 use crate::util::{self, HashAlgorithm};
@@ -538,6 +538,26 @@ impl RsassaJwsVerifier {
 
     pub fn remove_key_id(&mut self) {
         self.key_id = None;
+    }
+}
+
+#[cfg(feature = "rustcrypto")]
+impl PublicKeyTrait for RsassaJwsVerifier {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_der_public_key(&self.public_key)
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_pem_public_key(&self.public_key)
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let mut jwk = PublicKeyTrait::to_jwk_public_key(&self.public_key);
+        jwk.set_algorithm(self.algorithm.name());
+        if let Some(key_id) = &self.key_id {
+            jwk.set_key_id(key_id);
+        }
+        jwk
     }
 }
 
