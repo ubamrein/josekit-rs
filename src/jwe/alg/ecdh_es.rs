@@ -33,7 +33,9 @@ use crate::jwk::alg::{
     ec::{EcCurve, EcKeyPair},
     ecx::{EcxCurve, EcxKeyPair},
 };
-use crate::jwk::{Jwk, PublicKey as PublicKeyTrait};
+use crate::jwk::Jwk;
+#[cfg(feature = "rustcrypto")]
+use crate::jwk::PublicKey as PublicKeyTrait;
 use crate::util;
 use crate::util::der::{DerReader, DerType};
 
@@ -393,6 +395,8 @@ impl PublicKeyTrait for PublicKey {
         }
         if matches!(self, PublicKey::Ed25519(_) | PublicKey::Ed448(_)) {
             jwk.set_key_use("sig");
+        } else if matches!(self, PublicKey::X25519(_) | PublicKey::X448(_)) {
+            jwk.set_key_use("enc");
         }
         jwk
     }

@@ -369,7 +369,6 @@ impl EddsaJwsVerifier {
     }
 }
 
-#[cfg(feature = "rustcrypto")]
 impl PublicKeyTrait for EddsaJwsVerifier {
     fn to_der_public_key(&self) -> Vec<u8> {
         PublicKeyTrait::to_der_public_key(&self.public_key)
