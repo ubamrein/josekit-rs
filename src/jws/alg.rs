@@ -384,10 +384,6 @@ macro_rules! kapun_signing_provider {
 macro_rules! kapun_verifying_provider {
     ($alg:ty) => {
         #[cfg(feature = "kapun-provider")]
-        use kapun_crypto_provider::VerificationProblem;
-        #[cfg(feature = "kapun-provider")]
-        use kapun_crypto_provider::{KeyEncoding, Metadata, Verifier, Verifying};
-        #[cfg(feature = "kapun-provider")]
         impl Verifier for $alg {}
         #[cfg(feature = "kapun-provider")]
         impl Verifying for $alg {
