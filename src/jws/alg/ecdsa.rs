@@ -20,7 +20,9 @@ use crate::jwk::{
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::util::der::{DerBuilder, DerReader, DerType};
 use crate::util::{self, HashAlgorithm};
-use crate::{kapun_signing_provider, kapun_verifying_provider, JoseError, Value};
+#[cfg(feature = "kapun-provider")]
+use crate::{kapun_signing_provider, kapun_verifying_provider};
+use crate::{JoseError, Value};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum EcdsaJwsAlgorithm {
@@ -568,7 +570,9 @@ impl Deref for EcdsaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 kapun_verifying_provider!(EcdsaJwsVerifier);
+#[cfg(feature = "kapun-provider")]
 kapun_signing_provider!(EcdsaJwsSigner);
 
 #[cfg(test)]

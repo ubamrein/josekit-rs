@@ -14,7 +14,9 @@ use crate::jwk::{
     Jwk, PublicKey as PublicKeyTrait,
 };
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
-use crate::{kapun_signing_provider, kapun_verifying_provider, util};
+use crate::util;
+#[cfg(feature = "kapun-provider")]
+use crate::{kapun_signing_provider, kapun_verifying_provider};
 use crate::{JoseError, Value};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -448,7 +450,9 @@ impl Deref for EddsaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
 kapun_verifying_provider!(EddsaJwsVerifier);
+#[cfg(feature = "kapun-provider")]
 kapun_signing_provider!(EddsaJwsSigner);
 
 #[cfg(test)]

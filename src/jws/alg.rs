@@ -4,7 +4,7 @@ use kapun_crypto_provider::{
     oid_registry::OID_PKCS1_SHA1WITHRSA, DecodingError, KapunCryptoProvider,
 };
 
-#[cfg(feature = "rsa-sha1")]
+#[cfg(all(feature = "rsa-sha1", feature = "kapun-provider"))]
 use crate::jws::alg::rsassa::RsassaJwsAlgorithm::Rs1;
 use crate::{
     jwk::{Jwk, KeyPair},
@@ -14,6 +14,8 @@ use crate::{
 pub mod ecdsa;
 pub mod eddsa;
 pub mod hmac;
+#[cfg(feature = "kapun-provider")]
+mod kapun;
 #[cfg(feature = "pqc")]
 pub mod ml_dsa;
 pub mod rsassa;
@@ -308,132 +310,6 @@ impl KapunCryptoProvider for JosekitCryptoProvider {
             .map_err(|_| DecodingError::InvalidAlgorithm)?;
         Ok(jws_signer)
     }
-}
-
-#[macro_export]
-macro_rules! kapun_signing_provider {
-    ($alg:ty) => {
-        #[cfg(feature = "kapun-provider")]
-        use kapun_crypto_provider::{
-            KeyEncoding, Metadata, Signer, Signing, VerificationProblem, Verifier, Verifying,
-        };
-        #[cfg(feature = "kapun-provider")]
-        impl Signer for $alg {}
-        #[cfg(feature = "kapun-provider")]
-        impl Signing for $alg {
-            fn kapun_sign(
-                &self,
-                data: Vec<u8>,
-            ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
-                JwsSigner::sign(&*self, &data)
-                    .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
-            }
-
-            fn kapun_sign_hash(
-                &self,
-                hash: Vec<u8>,
-            ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
-                JwsSigner::sign_prehashed(&*self, &hash)
-                    .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
-            }
-        }
-        #[cfg(feature = "kapun-provider")]
-        impl KeyEncoding for $alg {
-            fn kapun_private_jwk(&self) -> Option<String> {
-                self.private_key.ec_key_jwk().ok()
-            }
-
-            fn kapun_public_jwk(&self) -> Option<String> {
-                self.private_key.public_key().ec_key_jwk().ok()
-            }
-
-            fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
-                self.private_key.ec_key_der().ok()
-            }
-
-            fn kapun_private_pkcs8_pem(&self) -> Option<String> {
-                self.private_key.ec_key_pem().ok()
-            }
-
-            fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
-                self.private_key.public_key().ec_key_der().ok()
-            }
-
-            fn kapun_public_spki_pem(&self) -> Option<String> {
-                self.private_key.public_key().ec_key_pem().ok()
-            }
-        }
-        #[cfg(feature = "kapun-provider")]
-        impl Metadata for $alg {
-            fn kapun_jose_alg(&self) -> Option<String> {
-                Some(self.algorithm.name().to_string())
-            }
-
-            fn kapun_oid(&self) -> Option<Vec<u8>> {
-                None
-            }
-
-            fn kapun_additional(&self) -> Option<kapun_crypto_provider::KapunValue> {
-                None
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! kapun_verifying_provider {
-    ($alg:ty) => {
-        #[cfg(feature = "kapun-provider")]
-        impl Verifier for $alg {}
-        #[cfg(feature = "kapun-provider")]
-        impl Verifying for $alg {
-            fn kapun_verify(
-                &self,
-                data: Vec<u8>,
-                signature: Vec<u8>,
-            ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
-                self.verify(&data, &signature)
-                    .map_err(|_| VerificationProblem::SignatureInvalid)
-            }
-
-            fn kapun_verify_hash(
-                &self,
-                hash: Vec<u8>,
-                signature: Vec<u8>,
-            ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
-                self.verify_prehashed(&hash, &signature)
-                    .map_err(|_| VerificationProblem::SignatureInvalid)
-            }
-        }
-        #[cfg(feature = "kapun-provider")]
-        impl KeyEncoding for $alg {
-            fn kapun_public_jwk(&self) -> Option<String> {
-                self.public_key.ec_key_jwk().ok()
-            }
-
-            fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
-                self.public_key.ec_key_der().ok()
-            }
-
-            fn kapun_public_spki_pem(&self) -> Option<String> {
-                self.public_key.ec_key_pem().ok()
-            }
-        }
-        #[cfg(feature = "kapun-provider")]
-        impl Metadata for $alg {
-            fn kapun_jose_alg(&self) -> Option<String> {
-                Some(self.algorithm.name().to_string())
-            }
-
-            fn kapun_oid(&self) -> Option<Vec<u8>> {
-                None
-            }
-
-            fn kapun_additional(&self) -> Option<kapun_crypto_provider::KapunValue> {
-                None
-            }
-        }
-    };
 }
 
 #[cfg(test)]
