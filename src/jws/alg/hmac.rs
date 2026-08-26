@@ -1,7 +1,10 @@
 use std::fmt::Display;
+
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 #[cfg(feature = "openssl")]
 use openssl::hash::MessageDigest;
 #[cfg(feature = "openssl")]
@@ -423,6 +426,53 @@ impl Deref for HmacJwsVerifier {
         self
     }
 }
+
+#[cfg(feature = "kapun-provider")]
+impl KeyEncoding for HmacJwsSigner {}
+#[cfg(feature = "kapun-provider")]
+impl Metadata for HmacJwsSigner {}
+#[cfg(feature = "kapun-provider")]
+impl Signing for HmacJwsSigner {
+    fn kapun_sign(&self, _data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        todo!()
+    }
+
+    fn kapun_sign_hash(
+        &self,
+        _hash: Vec<u8>,
+    ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        todo!()
+    }
+}
+
+#[cfg(feature = "kapun-provider")]
+impl KeyEncoding for HmacJwsVerifier {}
+#[cfg(feature = "kapun-provider")]
+impl Metadata for HmacJwsVerifier {}
+
+#[cfg(feature = "kapun-provider")]
+impl Verifying for HmacJwsVerifier {
+    fn kapun_verify(
+        &self,
+        _data: Vec<u8>,
+        _signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        todo!()
+    }
+
+    fn kapun_verify_hash(
+        &self,
+        _hash: Vec<u8>,
+        _signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        todo!()
+    }
+}
+
+#[cfg(feature = "kapun-provider")]
+impl Verifier for HmacJwsVerifier {}
+#[cfg(feature = "kapun-provider")]
+impl Signer for HmacJwsSigner {}
 
 #[cfg(test)]
 mod tests {

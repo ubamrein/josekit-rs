@@ -23,6 +23,8 @@ pub use HmacJwsAlgorithm::Hs384 as HS384;
 pub use HmacJwsAlgorithm::Hs512 as HS512;
 
 use crate::jws::alg::rsassa::RsassaJwsAlgorithm;
+#[cfg(feature = "rsa-sha1")]
+pub use RsassaJwsAlgorithm::Rs1 as RS1;
 pub use RsassaJwsAlgorithm::Rs256 as RS256;
 pub use RsassaJwsAlgorithm::Rs384 as RS384;
 pub use RsassaJwsAlgorithm::Rs512 as RS512;

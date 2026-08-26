@@ -14,6 +14,8 @@ use rsa::pkcs8::PrivateKeyInfoRef;
 #[cfg(feature = "rustcrypto")]
 use rsa::traits::{PrivateKeyParts, PublicKeyParts};
 
+#[cfg(feature = "rustcrypto")]
+use crate::jwk::PublicKey as PublicKeyTrait;
 use crate::jwk::{alg::rsapss::RsaPssKeyPair, Jwk, KeyPair};
 use crate::util::der::{DerBuilder, DerReader, DerType};
 use crate::util::oid::OID_RSA_ENCRYPTION;
@@ -556,6 +558,38 @@ impl Deref for RsaKeyPair {
 
     fn deref(&self) -> &Self::Target {
         self
+    }
+}
+
+#[cfg(feature = "rustcrypto")]
+impl PublicKeyTrait for rsa::RsaPublicKey {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        use rsa::pkcs1::EncodeRsaPublicKey;
+        self.to_pkcs1_der().unwrap().into_vec()
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        use rsa::{pkcs1::EncodeRsaPublicKey, pkcs8::LineEnding};
+        self.to_pkcs1_pem(LineEnding::CRLF).unwrap().into_bytes()
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let mut jwk = Jwk::new("RSA");
+        jwk.set_parameter(
+            "n",
+            Some(Value::String(util::encode_base64_urlsafe_nopad(
+                self.n().to_be_bytes_trimmed_vartime(),
+            ))),
+        )
+        .unwrap();
+        jwk.set_parameter(
+            "e",
+            Some(Value::String(util::encode_base64_urlsafe_nopad(
+                self.e().to_be_bytes_trimmed_vartime(),
+            ))),
+        )
+        .unwrap();
+        jwk
     }
 }
 

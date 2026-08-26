@@ -11,10 +11,12 @@ use openssl::sign::{Signer, Verifier};
 use crate::jwe::alg::ecdh_es::{PrivateKey, PublicKey};
 use crate::jwk::{
     alg::ed::{EdCurve, EdKeyPair},
-    Jwk,
+    Jwk, PublicKey as PublicKeyTrait,
 };
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::util;
+#[cfg(feature = "kapun-provider")]
+use crate::{kapun_signing_provider, kapun_verifying_provider};
 use crate::{JoseError, Value};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -327,6 +329,15 @@ impl JwsSigner for EddsaJwsSigner {
         .map_err(|err| JoseError::InvalidSignature(err))
     }
 
+    #[cfg(feature = "rustcrypto")]
+    fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, JoseError> {
+        (|| -> anyhow::Result<Vec<u8>> {
+            let signature = self.private_key.sign_prehashed(&digest)?;
+            Ok(signature)
+        })()
+        .map_err(|err| JoseError::InvalidSignature(err))
+    }
+
     fn box_clone(&self) -> Box<dyn JwsSigner> {
         Box::new(self.clone())
     }
@@ -357,6 +368,25 @@ impl EddsaJwsVerifier {
 
     pub fn remove_key_id(&mut self) {
         self.key_id = None;
+    }
+}
+
+impl PublicKeyTrait for EddsaJwsVerifier {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_der_public_key(&self.public_key)
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_pem_public_key(&self.public_key)
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let mut jwk = PublicKeyTrait::to_jwk_public_key(&self.public_key);
+        jwk.set_algorithm(self.algorithm.name());
+        if let Some(key_id) = &self.key_id {
+            jwk.set_key_id(key_id);
+        }
+        jwk
     }
 }
 
@@ -392,6 +422,20 @@ impl JwsVerifier for EddsaJwsVerifier {
         })()
         .map_err(|err| JoseError::InvalidSignature(err))
     }
+    #[cfg(feature = "rustcrypto")]
+    fn verify_prehashed(&self, message: &[u8], signature: &[u8]) -> Result<(), JoseError> {
+        (|| -> anyhow::Result<()> {
+            if self
+                .public_key
+                .verify_signature(message, signature)
+                .is_err()
+            {
+                bail!("The signature does not match.")
+            }
+            Ok(())
+        })()
+        .map_err(|err| JoseError::InvalidSignature(err))
+    }
 
     fn box_clone(&self) -> Box<dyn JwsVerifier> {
         Box::new(self.clone())
@@ -406,11 +450,19 @@ impl Deref for EddsaJwsVerifier {
     }
 }
 
+#[cfg(feature = "kapun-provider")]
+kapun_verifying_provider!(EddsaJwsVerifier);
+#[cfg(feature = "kapun-provider")]
+kapun_signing_provider!(EddsaJwsSigner);
+
 #[cfg(test)]
 mod tests {
+    use crate::jws::alg::eddsa::EddsaJwsAlgorithm::Eddsa;
+
     use super::*;
 
     use anyhow::Result;
+    use sha2::{Digest, Sha512};
     use std::fs;
     use std::path::PathBuf;
 
@@ -564,6 +616,30 @@ mod tests {
         }
 
         Ok(())
+    }
+    #[test]
+    fn test_sign_prehashed_eddsa() {
+        let Value::Object(secret_key) = serde_json::json!({
+            "kty":"OKP",
+            "crv":"Ed25519",
+            "d":"gz_mJAkje51i7HdYdSCRHpp1nOwdGXVbfakBuW3KPUI"
+        }) else {
+            panic!("")
+        };
+        let sk = Eddsa
+            .signer_from_jwk(&Jwk::from_map(secret_key).unwrap())
+            .unwrap();
+        let digest = Sha512::digest("test").to_vec();
+        let prehashed_sig = sk.sign_prehashed(&digest).unwrap();
+        let normal_sig = sk.sign(b"test").unwrap();
+        sk.private_key
+            .public_key()
+            .verify_signature(b"test", &normal_sig)
+            .expect("normal failed");
+        sk.private_key
+            .public_key()
+            .verify_signature_prehashed(b"test", &prehashed_sig)
+            .expect("prehashed failed");
     }
 
     fn load_file(path: &str) -> Result<Vec<u8>> {

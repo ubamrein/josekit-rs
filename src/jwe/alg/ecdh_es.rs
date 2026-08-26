@@ -5,6 +5,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+
 #[cfg(feature = "openssl")]
 use openssl::{
     aes::{self, AesKey},
@@ -20,8 +21,6 @@ use rsa::pkcs8::{
     },
     PrivateKeyInfoRef, SubjectPublicKeyInfoRef,
 };
-#[cfg(feature = "rustcrypto")]
-use sha2::{Digest, Sha256};
 
 #[cfg(feature = "rustcrypto")]
 use crate::{
@@ -35,6 +34,8 @@ use crate::jwk::alg::{
     ecx::{EcxCurve, EcxKeyPair},
 };
 use crate::jwk::Jwk;
+#[cfg(feature = "rustcrypto")]
+use crate::jwk::PublicKey as PublicKeyTrait;
 use crate::util;
 use crate::util::der::{DerReader, DerType};
 
@@ -163,16 +164,7 @@ impl PublicKey {
         }
     }
     pub fn ec_key_jwk(&self) -> Result<String, anyhow::Error> {
-        match self {
-            PublicKey::P256(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::P384(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::P521(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::K256(key) => Ok(key.to_jwk_string().to_string()),
-            PublicKey::X25519(_key) => todo!("JWK not implemented for x25519"),
-            PublicKey::X448(_key) => todo!("JWK not implemented for x448"),
-            PublicKey::Ed25519(_key) => todo!("JWK not implemented for ed25519"),
-            PublicKey::Ed448(_key) => todo!("JWK not implemented for ed448"),
-        }
+        Ok(PublicKeyTrait::to_jwk(self).to_string())
     }
     pub fn from_pkcs8_der_with_ed_curve(
         curve: EdCurve,
@@ -316,6 +308,97 @@ impl PublicKey {
                 Ok(())
             }
         }
+    }
+    pub fn verify_signature_prehashed(
+        &self,
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), anyhow::Error> {
+        match self {
+            PublicKey::Ed25519(verifying_key) => {
+                use ed25519_dalek::{Digest, DigestVerifier};
+                let signature = ed25519_dalek::Signature::from_slice(signature)?;
+                verifying_key.verify_digest(
+                    |d: &mut ed25519_dalek::Sha512| {
+                        d.update(ed25519_dalek::Sha512::digest(message));
+                        Ok(())
+                    },
+                    &signature,
+                )?;
+                Ok(())
+            }
+            PublicKey::Ed448(_verifying_key) => {
+                // use cx448::crypto_signature::DigestVerifier as Ed448DigestVerifier;
+                // use cx448::sha3::Digest;
+
+                // let signature = cx448::Signature::try_from(signature)?;
+                println!("after signature parsing");
+                // Ed448DigestVerifier::verify_digest(
+                //     verifying_key,
+                //     |d: &mut cx448::sha3::Sha3_512| {
+                //         cx448::sha3::Digest::update(d, cx448::sha3::Sha3_512::digest(message));
+                //     },
+                //     &signature,
+                // )?;
+                // Ok(())
+                unimplemented!("Trait issues")
+            }
+            _ => self.verify_signature(message, signature),
+        }
+    }
+}
+
+#[cfg(feature = "rustcrypto")]
+impl PublicKeyTrait for PublicKey {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        self.ec_key_der().unwrap()
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        self.ec_key_pem().unwrap().into_bytes()
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let (key_type, curve) = match self {
+            PublicKey::P256(_) => ("EC", "P-256"),
+            PublicKey::P384(_) => ("EC", "P-384"),
+            PublicKey::P521(_) => ("EC", "P-521"),
+            PublicKey::K256(_) => ("EC", "secp256k1"),
+            PublicKey::X25519(_) => ("OKP", "X25519"),
+            PublicKey::X448(_) => ("OKP", "X448"),
+            PublicKey::Ed25519(_) => ("OKP", "Ed25519"),
+            PublicKey::Ed448(_) => ("OKP", "Ed448"),
+        };
+
+        let mut jwk = Jwk::new(key_type);
+        jwk.set_parameter("crv", Some(Value::String(curve.to_owned())))
+            .unwrap();
+        jwk.set_parameter(
+            "x",
+            Some(Value::String(util::encode_base64_urlsafe_nopad(
+                self.ec_key_x(),
+            ))),
+        )
+        .unwrap();
+
+        if matches!(
+            self,
+            PublicKey::P256(_) | PublicKey::P384(_) | PublicKey::P521(_) | PublicKey::K256(_)
+        ) {
+            jwk.set_parameter(
+                "y",
+                Some(Value::String(util::encode_base64_urlsafe_nopad(
+                    self.ec_key_y(),
+                ))),
+            )
+            .unwrap();
+        }
+        if matches!(self, PublicKey::Ed25519(_) | PublicKey::Ed448(_)) {
+            jwk.set_key_use("sig");
+        } else if matches!(self, PublicKey::X25519(_) | PublicKey::X448(_)) {
+            jwk.set_key_use("enc");
+        }
+        jwk
     }
 }
 #[cfg(feature = "rustcrypto")]
@@ -611,19 +694,19 @@ impl PrivateKey {
             EcdhEsKeyType::Ec(ec_curve) => match ec_curve {
                 EcCurve::P256 => {
                     use p256::pkcs8::DecodePrivateKey;
-                    PrivateKey::P256(p256::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::P256(p256::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
                 EcCurve::P384 => {
                     use p384::pkcs8::DecodePrivateKey;
-                    PrivateKey::P384(p384::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::P384(p384::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
                 EcCurve::P521 => {
                     use p521::pkcs8::DecodePrivateKey;
-                    PrivateKey::P521(p521::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::P521(p521::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
                 EcCurve::Secp256k1 => {
                     use k256::pkcs8::DecodePrivateKey;
-                    PrivateKey::K256(k256::SecretKey::from_pkcs8_der(&pkcs8_der).unwrap())
+                    PrivateKey::K256(k256::SecretKey::from_pkcs8_der(pkcs8_der)?)
                 }
             },
             EcdhEsKeyType::Ecx(ecx_curve) => match ecx_curve {
@@ -727,6 +810,59 @@ impl PrivateKey {
                 let vk = signing_key.verifying_key();
                 println!("vk1: {:?}", vk.as_bytes());
                 signature.to_bytes().to_vec()
+            }
+        })
+    }
+    pub fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
+        Ok(match self {
+            PrivateKey::P256(secret_key) => {
+                use p256::ecdsa::signature::hazmat::PrehashSigner;
+                let s: p256::ecdsa::SigningKey = secret_key.into();
+                let signature: p256::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::P384(secret_key) => {
+                use p384::ecdsa::signature::hazmat::PrehashSigner;
+                let s: p384::ecdsa::SigningKey = secret_key.into();
+                let signature: p384::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::P521(secret_key) => {
+                use p521::ecdsa::signature::hazmat::PrehashSigner;
+                let s: p521::ecdsa::SigningKey = p521::ecdsa::SigningKey::from_slice(
+                    secret_key.to_nonzero_scalar().to_bytes().as_slice(),
+                )?;
+                let signature: p521::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::K256(secret_key) => {
+                use k256::ecdsa::signature::hazmat::PrehashSigner;
+                let s: k256::ecdsa::SigningKey = secret_key.into();
+                let signature: k256::ecdsa::Signature = s.sign_prehash(digest)?;
+                signature.to_der().to_bytes().to_vec()
+            }
+            PrivateKey::X25519(_) => unimplemented!("x25519 is DH algorithm"),
+            PrivateKey::X448(_) => unimplemented!("x448 is DH algorithm"),
+            PrivateKey::Ed25519(signing_key) => {
+                use ed25519_dalek::{Digest, DigestSigner};
+                let signature: ed25519_dalek::Signature =
+                    signing_key.sign_digest(|d: &mut ed25519_dalek::Sha512| d.update(digest));
+                signature.to_bytes().to_vec()
+            }
+            PrivateKey::Ed448(_signing_key) => {
+                // use cx448::crypto_signature::{
+                //     digest::Digest, digest::FixedOutput, digest::HashMarker, DigestSigner,
+
+                // };
+
+                // let signature: cx448::Signature = signing_key
+                //     .sign_digest::<cx448::crypto_signature::digest::Digest>(
+                //     |d: &mut cx448::sha3::Sha3_512| d.update(digest),
+                // );
+                // let vk = signing_key.verifying_key();
+                // println!("vk1: {:?}", vk.as_bytes());
+                // signature.to_bytes().to_vec()
+                unimplemented!("fucking annoying traits");
             }
         })
     }
@@ -1271,6 +1407,7 @@ impl EcdhEsJweAlgorithm {
         apu: Option<&[u8]>,
         apv: Option<&[u8]>,
     ) -> anyhow::Result<Vec<u8>> {
+        use sha2::{Digest, Sha256};
         let shared_key_len_bytes = ((shared_key_len * 8) as u32).to_be_bytes();
         let alg_len_bytes = (alg.len() as u32).to_be_bytes();
         let apu_len_bytes = (match apu {

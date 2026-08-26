@@ -7,10 +7,12 @@ use ml_dsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
 use ml_dsa::{KeyInit, Seed, SignatureEncoding};
 use ml_dsa::{Signer, Verifier, VerifyingKey};
 use serde_json::Value;
+use sha2::digest::Update;
+use signature::DigestSigner;
 
 use crate::JoseError;
 use crate::{
-    jwk::{Jwk, KeyPair},
+    jwk::{Jwk, KeyPair, PublicKey as PublicKeyTrait},
     util::{
         self,
         oid::{ObjectIdentifier, ML_DSA_44, ML_DSA_65, ML_DSA_87},
@@ -61,6 +63,19 @@ impl PrivateKey {
             PrivateKey::MlDsa44(signing_key) => signing_key.sign(msg).to_vec(),
             PrivateKey::MlDsa65(signing_key) => signing_key.sign(msg).to_vec(),
             PrivateKey::MlDsa87(signing_key) => signing_key.sign(msg).to_vec(),
+        }
+    }
+    pub fn sign_prehash(&self, digest: &[u8]) -> Vec<u8> {
+        match self {
+            PrivateKey::MlDsa44(signing_key) => {
+                signing_key.sign_digest(|d| d.update(digest)).to_vec()
+            }
+            PrivateKey::MlDsa65(signing_key) => {
+                signing_key.sign_digest(|d| d.update(digest)).to_vec()
+            }
+            PrivateKey::MlDsa87(signing_key) => {
+                signing_key.sign_digest(|d| d.update(digest)).to_vec()
+            }
         }
     }
 }
@@ -182,6 +197,35 @@ impl PublicKey {
     }
 }
 
+impl PublicKeyTrait for PublicKey {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        self.to_der().unwrap_or_default()
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        self.to_pem().unwrap_or_default().into_bytes()
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let variant = match self {
+            PublicKey::MlDsa44(_) => MlDsa::MlDsa44,
+            PublicKey::MlDsa65(_) => MlDsa::MlDsa65,
+            PublicKey::MlDsa87(_) => MlDsa::MlDsa87,
+        };
+        let mut jwk = Jwk::new("AKP");
+        jwk.set_parameter("alg", Some(Value::String(variant.to_string())))
+            .unwrap();
+        jwk.set_parameter(
+            "pub",
+            Some(Value::String(util::encode_base64_urlsafe_nopad(
+                self.to_bytes(),
+            ))),
+        )
+        .unwrap();
+        jwk
+    }
+}
+
 impl PrivateKey {
     pub fn public_key(&self) -> PublicKey {
         match self {
@@ -216,6 +260,7 @@ impl PrivateKey {
                 .to_vec(),
         })
     }
+
     pub fn to_pem_private_key(&self) -> Vec<u8> {
         match self {
             PrivateKey::MlDsa44(signing_key) => signing_key

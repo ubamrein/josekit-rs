@@ -161,6 +161,25 @@ impl EcKeyPair {
     pub fn from_der(input: impl AsRef<[u8]>, curve: Option<EcCurve>) -> Result<Self, JoseError> {
         (|| -> anyhow::Result<Self> {
             let input = input.as_ref();
+            #[cfg(feature = "rustcrypto")]
+            if let Some(curve) = curve {
+                if input.len() == curve.coordinate_size() {
+                    let private_key = match curve {
+                        EcCurve::P256 => PrivateKey::P256(p256::SecretKey::from_slice(input)?),
+                        EcCurve::P384 => PrivateKey::P384(p384::SecretKey::from_slice(input)?),
+                        EcCurve::P521 => PrivateKey::P521(p521::SecretKey::from_slice(input)?),
+                        EcCurve::Secp256k1 => PrivateKey::K256(k256::SecretKey::from_slice(input)?),
+                    };
+
+                    return Ok(EcKeyPair {
+                        private_key,
+                        curve,
+                        algorithm: None,
+                        key_id: None,
+                    });
+                }
+            }
+
             let pkcs8_der_vec;
             let (pkcs8_der, curve) = match Self::detect_pkcs8(input, false) {
                 Some(val) => match curve {
@@ -221,36 +240,57 @@ impl EcKeyPair {
                 Some(_) => bail!("A parameter d must be a string."),
                 None => bail!("A parameter d is required."),
             };
-            let x = match jwk.parameter("x") {
-                Some(Value::String(val)) => {
-                    let x = util::decode_base64_urlsafe_no_pad(val)?;
-                    Some(x)
-                }
-                Some(_) => bail!("A parameter x must be a string."),
-                None => None,
-            };
-            let y = match jwk.parameter("y") {
-                Some(Value::String(val)) => {
-                    let y = util::decode_base64_urlsafe_no_pad(val)?;
-                    Some(y)
-                }
-                Some(_) => bail!("A parameter y must be a string."),
-                None => None,
-            };
+            let algorithm = jwk.algorithm().map(|val| val.to_string());
+            let key_id = jwk.key_id().map(|val| val.to_string());
 
-            let public_key = if let (Some(x), Some(y)) = (x, y) {
-                let mut public_key = Vec::with_capacity(1 + x.len() + y.len());
-                public_key.push(0x04);
-                public_key.extend_from_slice(&x);
-                public_key.extend_from_slice(&y);
-                Some(public_key)
-            } else {
-                None
-            };
-
-            let mut builder = DerBuilder::new();
-            builder.begin(DerType::Sequence);
+            #[cfg(feature = "rustcrypto")]
             {
+                let private_key = match curve {
+                    EcCurve::P256 => PrivateKey::P256(p256::SecretKey::from_slice(&d)?),
+                    EcCurve::P384 => PrivateKey::P384(p384::SecretKey::from_slice(&d)?),
+                    EcCurve::P521 => PrivateKey::P521(p521::SecretKey::from_slice(&d)?),
+                    EcCurve::Secp256k1 => PrivateKey::K256(k256::SecretKey::from_slice(&d)?),
+                };
+
+                Ok(EcKeyPair {
+                    private_key,
+                    curve,
+                    algorithm,
+                    key_id,
+                })
+            }
+
+            #[cfg(all(not(feature = "rustcrypto"), feature = "openssl"))]
+            {
+                let x = match jwk.parameter("x") {
+                    Some(Value::String(val)) => {
+                        let x = util::decode_base64_urlsafe_no_pad(val)?;
+                        Some(x)
+                    }
+                    Some(_) => bail!("A parameter x must be a string."),
+                    None => None,
+                };
+                let y = match jwk.parameter("y") {
+                    Some(Value::String(val)) => {
+                        let y = util::decode_base64_urlsafe_no_pad(val)?;
+                        Some(y)
+                    }
+                    Some(_) => bail!("A parameter y must be a string."),
+                    None => None,
+                };
+
+                let public_key = if let (Some(x), Some(y)) = (x, y) {
+                    let mut public_key = Vec::with_capacity(1 + x.len() + y.len());
+                    public_key.push(0x04);
+                    public_key.extend_from_slice(&x);
+                    public_key.extend_from_slice(&y);
+                    Some(public_key)
+                } else {
+                    None
+                };
+
+                let mut builder = DerBuilder::new();
+                builder.begin(DerType::Sequence);
                 builder.append_integer_from_u8(1);
                 builder.append_octed_string_from_bytes(&d);
                 builder.begin(DerType::Other(DerClass::ContextSpecific, 0));
@@ -266,23 +306,18 @@ impl EcKeyPair {
                     }
                     builder.end();
                 }
+                builder.end();
+
+                let pkcs8 = EcKeyPair::to_pkcs8(&builder.build(), false, curve);
+                let private_key = PKey::private_key_from_der(&pkcs8)?;
+
+                Ok(EcKeyPair {
+                    private_key,
+                    curve,
+                    algorithm,
+                    key_id,
+                })
             }
-            builder.end();
-
-            let pkcs8 = EcKeyPair::to_pkcs8(&builder.build(), false, curve);
-            #[cfg(feature = "openssl")]
-            let private_key = PKey::private_key_from_der(&pkcs8)?;
-            #[cfg(feature = "rustcrypto")]
-            let private_key = PrivateKey::from_pkcs8_for_ec_curve(curve, &pkcs8)?;
-            let algorithm = jwk.algorithm().map(|val| val.to_string());
-            let key_id = jwk.key_id().map(|val| val.to_string());
-
-            Ok(EcKeyPair {
-                private_key,
-                curve,
-                algorithm,
-                key_id,
-            })
         })()
         .map_err(|err| JoseError::InvalidKeyFormat(err))
     }
@@ -651,6 +686,8 @@ impl Deref for EcKeyPair {
 mod tests {
     use anyhow::Result;
 
+    use crate::{util, Value};
+
     use super::{EcCurve, EcKeyPair};
 
     #[test]
@@ -674,6 +711,34 @@ mod tests {
             assert_eq!(der_private1, der_private2);
             assert_eq!(der_public1, der_public2);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ec_from_raw_private_key() -> Result<()> {
+        let raw_private_key = vec![1u8; EcCurve::P256.coordinate_size()];
+
+        let key_pair = EcKeyPair::from_der(&raw_private_key, Some(EcCurve::P256))?;
+
+        assert_eq!(
+            key_pair.to_jwk_private_key().parameter("d"),
+            Some(&Value::String(util::encode_base64_urlsafe_nopad(
+                &raw_private_key
+            )))
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ec_from_jwk_preserves_key_id() -> Result<()> {
+        let mut key_pair_1 = EcKeyPair::generate(EcCurve::P256)?;
+        key_pair_1.set_key_id(Some("issuer-key"));
+
+        let key_pair_2 = EcKeyPair::from_jwk(&key_pair_1.to_jwk_private_key())?;
+
+        assert_eq!(key_pair_2.key_id(), Some("issuer-key"));
 
         Ok(())
     }

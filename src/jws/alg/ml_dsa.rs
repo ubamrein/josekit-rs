@@ -2,10 +2,12 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use anyhow::bail;
+#[cfg(feature = "kapun-provider")]
+use kapun_crypto_provider::{KeyEncoding, Metadata, Signer, Signing, Verifier, Verifying};
 
 use crate::jwk::alg::ml_dsa::PrivateKey;
 use crate::jwk::alg::ml_dsa::{MlDsa, MlDsaKeyPair, PublicKey};
-use crate::jwk::Jwk;
+use crate::jwk::{Jwk, PublicKey as PublicKeyTrait};
 use crate::jws::{JwsAlgorithm, JwsSigner, JwsVerifier};
 use crate::util::{self};
 use crate::{JoseError, Value};
@@ -286,6 +288,11 @@ impl JwsSigner for MldsaJwsSigner {
             .map_err(|err| JoseError::InvalidSignature(err))
     }
 
+    fn sign_prehashed(&self, digest: &[u8]) -> Result<Vec<u8>, JoseError> {
+        (|| -> anyhow::Result<Vec<u8>> { Ok(self.private_key.sign_prehash(digest)) })()
+            .map_err(|err| JoseError::InvalidSignature(err))
+    }
+
     fn box_clone(&self) -> Box<dyn JwsSigner> {
         Box::new(self.clone())
     }
@@ -296,6 +303,85 @@ impl Deref for MldsaJwsSigner {
 
     fn deref(&self) -> &Self::Target {
         self
+    }
+}
+
+#[cfg(feature = "kapun-provider")]
+impl KeyEncoding for MldsaJwsSigner {
+    fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
+        self.private_key.to_der_private_key().ok()
+    }
+
+    fn kapun_private_pkcs8_pem(&self) -> Option<String> {
+        String::from_utf8(self.private_key.to_pem_private_key()).ok()
+    }
+
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+        self.private_key.public_key().to_der().ok()
+    }
+
+    fn kapun_public_spki_pem(&self) -> Option<String> {
+        self.private_key.public_key().to_pem().ok()
+    }
+}
+#[cfg(feature = "kapun-provider")]
+impl KeyEncoding for MldsaJwsVerifier {
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
+        self.public_key.to_der().ok()
+    }
+
+    fn kapun_public_spki_pem(&self) -> Option<String> {
+        self.public_key.to_pem().ok()
+    }
+}
+
+#[cfg(feature = "kapun-provider")]
+impl Signing for MldsaJwsSigner {
+    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        self.sign(&data)
+            .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+    }
+
+    fn kapun_sign_hash(
+        &self,
+        hash: Vec<u8>,
+    ) -> Result<Vec<u8>, kapun_crypto_provider::SigningProblem> {
+        self.sign_prehashed(&hash)
+            .map_err(|_| kapun_crypto_provider::SigningProblem::SigningFailed)
+    }
+}
+
+#[cfg(feature = "kapun-provider")]
+impl Verifying for MldsaJwsVerifier {
+    fn kapun_verify(
+        &self,
+        data: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        self.verify(&data, &signature)
+            .map_err(|_| kapun_crypto_provider::VerificationProblem::SignatureInvalid)
+    }
+
+    fn kapun_verify_hash(
+        &self,
+        hash: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), kapun_crypto_provider::VerificationProblem> {
+        self.verify_prehashed(&hash, &signature)
+            .map_err(|_| kapun_crypto_provider::VerificationProblem::SignatureInvalid)
+    }
+}
+
+#[cfg(feature = "kapun-provider")]
+impl Metadata for MldsaJwsSigner {
+    fn kapun_jose_alg(&self) -> Option<String> {
+        Some(self.algorithm.name().to_string())
+    }
+}
+#[cfg(feature = "kapun-provider")]
+impl Metadata for MldsaJwsVerifier {
+    fn kapun_jose_alg(&self) -> Option<String> {
+        Some(self.algorithm.name().to_string())
     }
 }
 
@@ -313,6 +399,25 @@ impl MldsaJwsVerifier {
 
     pub fn remove_key_id(&mut self) {
         self.key_id = None;
+    }
+}
+
+impl PublicKeyTrait for MldsaJwsVerifier {
+    fn to_der_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_der_public_key(&self.public_key)
+    }
+
+    fn to_pem_public_key(&self) -> Vec<u8> {
+        PublicKeyTrait::to_pem_public_key(&self.public_key)
+    }
+
+    fn to_jwk_public_key(&self) -> Jwk {
+        let mut jwk = PublicKeyTrait::to_jwk_public_key(&self.public_key);
+        jwk.set_algorithm(self.algorithm.name());
+        if let Some(key_id) = &self.key_id {
+            jwk.set_key_id(key_id);
+        }
+        jwk
     }
 }
 
@@ -346,6 +451,11 @@ impl JwsVerifier for MldsaJwsVerifier {
         Box::new(self.clone())
     }
 }
+
+#[cfg(feature = "kapun-provider")]
+impl Signer for MldsaJwsSigner {}
+#[cfg(feature = "kapun-provider")]
+impl Verifier for MldsaJwsVerifier {}
 
 impl Deref for MldsaJwsVerifier {
     type Target = dyn JwsVerifier;

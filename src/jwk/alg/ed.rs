@@ -4,6 +4,8 @@ use std::ops::Deref;
 use anyhow::bail;
 #[cfg(feature = "openssl")]
 use openssl::pkey::{PKey, Private};
+#[cfg(feature = "rustcrypto")]
+use rand::rngs::SysRng;
 
 #[cfg(feature = "rustcrypto")]
 use crate::jwe::alg::ecdh_es::PrivateKey;
@@ -98,7 +100,9 @@ impl EdKeyPair {
             #[cfg(feature = "rustcrypto")]
             let private_key = match curve {
                 EdCurve::Ed25519 => {
-                    PrivateKey::Ed25519(ed25519_dalek::SigningKey::generate(&mut OsRng))
+                    use ed25519_dalek::rand_core::UnwrapErr;
+                    let mut csprng = UnwrapErr(SysRng);
+                    PrivateKey::Ed25519(ed25519_dalek::SigningKey::generate(&mut csprng))
                 }
                 EdCurve::Ed448 => PrivateKey::Ed448(cx448::SigningKey::generate(&mut OsRng)),
             };
