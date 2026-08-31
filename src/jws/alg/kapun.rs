@@ -64,10 +64,6 @@ macro_rules! kapun_signing_provider {
             fn kapun_oid(&self) -> Option<Vec<u8>> {
                 None
             }
-
-            fn kapun_additional(&self) -> Option<$crate::kapun_crypto_provider::KapunValue> {
-                None
-            }
         }
     };
 }
@@ -120,10 +116,6 @@ macro_rules! kapun_verifying_provider {
             }
 
             fn kapun_oid(&self) -> Option<Vec<u8>> {
-                None
-            }
-
-            fn kapun_additional(&self) -> Option<$crate::kapun_crypto_provider::KapunValue> {
                 None
             }
         }
